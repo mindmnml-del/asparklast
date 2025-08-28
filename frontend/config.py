@@ -10,7 +10,7 @@ class AISpark_Config:
     """AISpark specific configuration to avoid conflicts"""
     
     # API Configuration
-    API_BASE_URL = os.getenv("AISPARK_API_URL", "http://localhost:8000")
+    API_BASE_URL = os.getenv("AISPARK_API_URL", "http://localhost:8001")
     API_PREFIX = "/api/v1/aispark"
     API_TIMEOUT = 30
     

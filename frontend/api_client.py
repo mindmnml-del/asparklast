@@ -16,7 +16,7 @@ class APIClient:
     def __init__(self, base_url: str | None = None):
         # Prefer env var AISPARK_API_URL, default to 8000
         import os as _os
-        self.base_url = base_url or _os.getenv("AISPARK_API_URL", "http://localhost:8000")
+        self.base_url = base_url or _os.getenv("AISPARK_API_URL", "http://localhost:8001")
         self.session = requests.Session()
         
     def _make_request(
