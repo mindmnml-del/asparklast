@@ -10,7 +10,7 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import StaticPool
 
-from ..config import settings
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +27,7 @@ if DATABASE_URL.startswith("sqlite"):
             "timeout": 20,
         },
         poolclass=StaticPool,
-        echo=settings.debug,  # SQL logging in debug mode
+        echo=settings.debug_mode,  # SQL logging in debug mode
     )
     
     # SQLite performance optimizations
@@ -53,7 +53,7 @@ else:
         max_overflow=20,
         pool_pre_ping=True,
         pool_recycle=300,
-        echo=settings.debug,
+        echo=settings.debug_mode,
     )
 
 # Create sessionmaker

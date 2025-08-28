@@ -12,7 +12,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import HTTPException, status
 
-from ..config import settings
+from config import settings
 
 logger = logging.getLogger(__name__)
 

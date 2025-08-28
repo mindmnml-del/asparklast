@@ -465,6 +465,7 @@ Respond with a structured JSON containing:
     
     def _process_response(self, response, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process the AI response into structured format"""
+        print(f"DEBUG: RAW AI RESPONSE TEXT: {response.text}")
         
         try:
             response_text = response.text.strip()

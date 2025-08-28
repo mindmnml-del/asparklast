@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     ai_temperature: float = Field(default=0.8, ge=0.0, le=2.0)
     ai_max_tokens: int = Field(default=2048, ge=1, le=8192)
     
+    # RAG Configuration
+    rag_mode: str = Field(default="vertex_first")
+    
+    # Google Search Configuration
+    google_search_enabled: bool = Field(default=False)
+    google_cse_api_key: str = Field(default="")
+    google_cse_cx: str = Field(default="")
+    
     # Feature Flags
     enable_rag: bool = Field(default=True)
     enable_diversity: bool = Field(default=True)
@@ -50,6 +58,7 @@ class Settings(BaseSettings):
     class Config:
         # default; overridden via instance _env_file below
         env_file = ".env"
+        env_prefix = 'aispark_'
         case_sensitive = False
 
 # Resolve .env from project root (.. / .env) or fallback to backend/.env or default
