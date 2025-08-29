@@ -36,6 +36,14 @@ class Settings(BaseSettings):
     google_cse_api_key: str = Field(default="")
     google_cse_cx: str = Field(default="")
     
+    # Vertex AI Search Configuration
+    vertex_search_enabled: bool = Field(default=False)
+    vertex_project_id: str = Field(default="")
+    vertex_location: str = Field(default="global")
+    vertex_data_store_id: str = Field(default="")
+    vertex_engine_id: str = Field(default="")
+    vertex_serving_config: str = Field(default="default_search")
+    
     # Feature Flags
     enable_rag: bool = Field(default=True)
     enable_diversity: bool = Field(default=True)

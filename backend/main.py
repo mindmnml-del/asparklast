@@ -5,7 +5,7 @@ Consolidated and optimized backend with unified services
 
 import logging
 from contextlib import asynccontextmanager
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +17,7 @@ from core import models, schemas, crud, auth
 from core.database import get_db, create_tables
 from services.unified_ai_service import ai_service
 from services.unified_critic_service import critic_service
+from services.vertex_search_service import vertex_search_service
 from utils.health_check import get_health_status, get_quick_health
 
 # Configure logging
@@ -167,6 +168,44 @@ def get_prompt(
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
     return prompt
+
+@app.get("/search/vertex")
+async def vertex_search(
+    q: str,
+    limit: int = 10,
+    filter: Optional[str] = None,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Vertex AI Search endpoint"""
+    if not vertex_search_service.is_available():
+        raise HTTPException(
+            status_code=503, 
+            detail="Vertex AI Search service not available"
+        )
+    
+    try:
+        result = await vertex_search_service.search(
+            query=q,
+            max_results=limit,
+            filter_expression=filter
+        )
+        
+        if result.get("error"):
+            raise HTTPException(
+                status_code=500,
+                detail=result.get("message", "Search failed")
+            )
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Vertex search error: {e}")
+        raise HTTPException(status_code=500, detail="Search request failed")
+
+@app.get("/search/vertex/status")
+def vertex_search_status(current_user: models.User = Depends(get_current_user)):
+    """Get Vertex AI Search service status"""
+    return vertex_search_service.get_status()
 
 if __name__ == "__main__":
     import uvicorn
