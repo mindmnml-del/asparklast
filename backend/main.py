@@ -16,7 +16,7 @@ from config import settings
 from core import models, schemas, crud, auth
 from core.database import get_db, create_tables
 from services.unified_ai_service import ai_service
-from services.unified_critic_service import critic_service
+from services.unified_critic_service import critic_service, AnalysisType
 from services.vertex_search_service import vertex_search_service
 from utils.health_check import get_health_status, get_quick_health
 
@@ -206,6 +206,36 @@ async def vertex_search(
 def vertex_search_status(current_user: models.User = Depends(get_current_user)):
     """Get Vertex AI Search service status"""
     return vertex_search_service.get_status()
+
+@app.post("/critic/analyze")
+async def analyze_prompt(
+    request: schemas.CriticAnalysisRequest,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Analyze prompt quality and suggest improvements"""
+    try:
+        analysis_type = getattr(AnalysisType, request.analysis_type.upper(), 
+                               AnalysisType.PHOTO)
+        
+        result = critic_service.analyze_prompt(
+            prompt=request.prompt,
+            negative_prompt=request.negative_prompt or "",
+            analysis_type=analysis_type
+        )
+        
+        if result.get("error"):
+            raise HTTPException(status_code=500, detail=result.get("message"))
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Critic analysis error: {e}")
+        raise HTTPException(status_code=500, detail="Analysis failed")
+
+@app.get("/critic/stats")
+def critic_stats(current_user: models.User = Depends(get_current_user)):
+    """Get critic service statistics"""
+    return critic_service.get_stats()
 
 if __name__ == "__main__":
     import uvicorn
