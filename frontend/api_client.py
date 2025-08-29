@@ -212,6 +212,37 @@ class APIClient:
         params = f"?q={query}&limit={limit}"
         return self._make_request("GET", f"/prompts/search{params}", headers=headers)
     
+    # Export
+    def export_prompts(
+        self, 
+        format: str, 
+        token: str, 
+        skip: int = 0, 
+        limit: int = 1000, 
+        favorites_only: bool = False
+    ) -> str:
+        """Export user's prompts in specified format"""
+        headers = {"Authorization": f"Bearer {token}"}
+        params = f"?skip={skip}&limit={limit}"
+        if favorites_only:
+            params += "&favorites_only=true"
+        
+        try:
+            url = f"{self.base_url}/prompts/export/{format}{params}"
+            response = self.session.get(url, headers=headers, timeout=30)
+            
+            if response.status_code == 200:
+                return response.text
+            elif response.status_code == 401:
+                return "Authentication failed. Please login again."
+            elif response.status_code == 404:
+                return "No prompts found to export."
+            else:
+                return f"Export failed with status {response.status_code}"
+                
+        except Exception as e:
+            return f"Export error: {str(e)}"
+    
     # Utility methods
     def test_connection(self) -> bool:
         """Test if backend is accessible"""

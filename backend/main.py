@@ -7,9 +7,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Dict, Any, List, Optional
 
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends, status, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from config import settings
@@ -18,6 +19,7 @@ from core.database import get_db, create_tables
 from services.unified_ai_service import ai_service
 from services.unified_critic_service import critic_service, AnalysisType
 from services.vertex_search_service import vertex_search_service
+from services.export_service import export_service
 from utils.health_check import get_health_status, get_quick_health
 
 # Configure logging
@@ -129,11 +131,17 @@ def get_me(current_user: models.User = Depends(get_current_user)):
 @app.post("/generate", response_model=schemas.GeneratedPrompt)
 async def generate(
     request: schemas.StudioRequest,
+    authorization: Optional[str] = Header(None),
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     try:
-        response = await ai_service.generate_response(request.dict())
+        # Extract token from Authorization header for RAG authentication
+        user_token = None
+        if authorization and authorization.startswith("Bearer "):
+            user_token = authorization[7:]  # Remove "Bearer " prefix
+        
+        response = await ai_service.generate_response(request.dict(), user_token)
         
         if response.get("error"):
             raise HTTPException(status_code=500, detail=response.get("message"))
@@ -236,6 +244,68 @@ async def analyze_prompt(
 def critic_stats(current_user: models.User = Depends(get_current_user)):
     """Get critic service statistics"""
     return critic_service.get_stats()
+
+@app.get("/prompts/export/{format}")
+def export_prompts(
+    format: str,
+    skip: int = 0,
+    limit: int = 1000,
+    favorites_only: bool = False,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Export user prompts in specified format (json, csv, txt)"""
+    
+    # Validate format
+    if format.lower() not in ['json', 'csv', 'txt']:
+        raise HTTPException(status_code=400, detail="Invalid format. Use: json, csv, or txt")
+    
+    try:
+        # Get user's prompts with full data
+        prompts = crud.get_prompts_by_user(db, current_user.id, skip, limit, favorites_only)
+        
+        if not prompts:
+            raise HTTPException(status_code=404, detail="No prompts found to export")
+        
+        # Get full prompt data for export
+        full_prompts = []
+        for prompt_summary in prompts:
+            full_prompt = crud.get_prompt_by_id(db, prompt_summary.id, current_user.id)
+            if full_prompt:
+                full_prompts.append(full_prompt)
+        
+        # Export based on format
+        format_lower = format.lower()
+        
+        if format_lower == 'json':
+            content = export_service.export_to_json(full_prompts)
+            media_type = "application/json"
+            filename = f"aispark_prompts_{current_user.id}_{len(full_prompts)}.json"
+            
+        elif format_lower == 'csv':
+            content = export_service.export_to_csv(full_prompts)
+            media_type = "text/csv"
+            filename = f"aispark_prompts_{current_user.id}_{len(full_prompts)}.csv"
+            
+        elif format_lower == 'txt':
+            content = export_service.export_to_txt(full_prompts)
+            media_type = "text/plain"
+            filename = f"aispark_prompts_{current_user.id}_{len(full_prompts)}.txt"
+        
+        return Response(
+            content=content,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f"attachment; filename={filename}",
+                "Content-Type": f"{media_type}; charset=utf-8"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Export error: {e}")
+        raise HTTPException(status_code=500, detail="Export failed")
 
 if __name__ == "__main__":
     import uvicorn

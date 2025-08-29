@@ -50,10 +50,21 @@ class VertexSearchService:
             else:
                 logger.info("Service account key file not found, trying Application Default Credentials")
             
-            # Import and initialize the client
+            # Import and initialize the client with explicit service account
             from google.cloud import discoveryengine_v1 as discoveryengine
+            from google.oauth2 import service_account
             
-            self.client = discoveryengine.SearchServiceClient()
+            # Force service account credentials
+            service_account_path = Path("streamlit-vertex-key.json")
+            if service_account_path.exists():
+                credentials = service_account.Credentials.from_service_account_file(
+                    str(service_account_path.resolve())
+                )
+                self.client = discoveryengine.SearchServiceClient(credentials=credentials)
+                logger.info(f"Using service account: {credentials.service_account_email}")
+            else:
+                self.client = discoveryengine.SearchServiceClient()
+                logger.info("Using default credentials")
             
             # Build serving config path - use engine_id if available, otherwise data_store_id
             engine_id = settings.vertex_engine_id or settings.vertex_data_store_id

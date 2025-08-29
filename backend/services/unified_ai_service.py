@@ -331,31 +331,176 @@ Respond with a structured JSON containing:
         return len(intersection) / len(union) if union else 0.0
     
     def _enhance_with_rag(self, request_data: Dict[str, Any]) -> str:
-        """Enhance prompt with RAG knowledge"""
-        if not self.rag_ready or not settings.enable_rag:
+        """Enhance prompt with RAG knowledge using Vertex Search"""
+        if not settings.enable_rag:
             return ""
         
-        # Extract relevant knowledge based on request
+        try:
+            # Import vertex search service
+            from services.vertex_search_service import vertex_search_service
+            
+            # Extract search query from request
+            styles = request_data.get("artistic_styles", [])
+            subject = request_data.get("subject_action", "")
+            
+            # Build search query from request data
+            search_terms = []
+            if styles:
+                search_terms.extend(styles)
+            if subject:
+                search_terms.append(subject)
+            
+            if not search_terms:
+                return ""
+            
+            search_query = " ".join(search_terms)
+            logger.debug(f"RAG search query: {search_query}")
+            
+            # Check if vertex search is available
+            if not vertex_search_service.is_available():
+                logger.warning("Vertex Search not available for RAG")
+                return ""
+            
+            # Perform search using asyncio
+            import asyncio
+            try:
+                # If we're already in an async context, use the existing loop
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # We're in an async context, but can't await here
+                    # Fall back to local knowledge base approach
+                    return self._fallback_local_rag(request_data)
+                else:
+                    search_result = loop.run_until_complete(
+                        vertex_search_service.search(search_query, max_results=3)
+                    )
+            except RuntimeError:
+                # No event loop or can't run in current context
+                search_result = asyncio.run(
+                    vertex_search_service.search(search_query, max_results=3)
+                )
+            
+            if search_result.get("error") or not search_result.get("results"):
+                logger.debug("No relevant knowledge found in Vertex Search")
+                return ""
+            
+            # Extract relevant content from search results
+            relevant_knowledge = []
+            for result in search_result["results"][:3]:  # Max 3 results
+                doc = result.get("document", {})
+                content = doc.get("content", "") or doc.get("snippet", "")
+                if content:
+                    # Limit content length
+                    content = content[:400] + "..." if len(content) > 400 else content
+                    relevant_knowledge.append(content)
+            
+            if relevant_knowledge:
+                rag_context = "\n\n".join(relevant_knowledge)
+                logger.info(f"RAG enhanced with {len(relevant_knowledge)} knowledge pieces from Vertex Search")
+                return f"\n\nRelevant knowledge context:\n{rag_context}"
+            
+            return ""
+            
+        except Exception as e:
+            logger.error(f"Error in Vertex Search RAG: {e}")
+            # Fall back to local knowledge base if available
+            return self._fallback_local_rag(request_data)
+    
+    def _fallback_local_rag(self, request_data: Dict[str, Any]) -> str:
+        """Fallback to local knowledge base RAG"""
+        if not self.rag_ready:
+            return ""
+        
+        # Original local RAG logic as fallback
         styles = request_data.get("artistic_styles", [])
         subject = request_data.get("subject_action", "")
         
         relevant_knowledge = []
         
         for filename, content in self.knowledge_base.items():
-            # Simple relevance check
             content_lower = content.lower()
             if any(style.lower() in content_lower for style in styles):
-                relevant_knowledge.append(content[:500])  # First 500 chars
+                relevant_knowledge.append(content[:500])
             elif any(word in content_lower for word in subject.lower().split()):
-                relevant_knowledge.append(content[:300])  # First 300 chars
+                relevant_knowledge.append(content[:300])
         
         if relevant_knowledge:
-            rag_context = "\n\n".join(relevant_knowledge[:3])  # Max 3 pieces
+            rag_context = "\n\n".join(relevant_knowledge[:3])
             return f"\n\nRelevant knowledge context:\n{rag_context}"
         
         return ""
     
-    async def generate_response(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
+    async def _enhance_with_rag_async(self, request_data: Dict[str, Any], user_token: str = None) -> str:
+        """Async version of RAG enhancement using Vertex Search with proper auth context"""
+        if not settings.enable_rag:
+            return ""
+        
+        try:
+            # Extract search query from request
+            styles = request_data.get("artistic_styles", [])
+            subject = request_data.get("subject_action", "")
+            
+            # Build search query from request data
+            search_terms = []
+            if styles:
+                search_terms.extend(styles)
+            if subject:
+                search_terms.append(subject)
+            
+            if not search_terms:
+                return ""
+            
+            search_query = " ".join(search_terms)
+            logger.info(f"🔍 RAG async search query: {search_query}")
+            
+            # Use Discovery Engine with service account credentials
+            logger.info("🔍 Using Discovery Engine with service account...")
+            from services.vertex_search_service import vertex_search_service
+            
+            if vertex_search_service.is_available():
+                logger.info("🔍 Vertex Search service is available, performing search...")
+                search_result = await vertex_search_service.search(search_query, max_results=3)
+                
+                if not search_result.get("error") and search_result.get("results"):
+                    logger.info(f"🔍 Direct Vertex Search found {len(search_result['results'])} results")
+                    
+                    # Extract relevant content from search results
+                    relevant_knowledge = []
+                    for i, result in enumerate(search_result["results"][:3]):  # Max 3 results
+                        doc = result.get("document", {})
+                        content_field = doc.get("content")
+                        snippet_field = doc.get("snippet", "")
+                        
+                        logger.info(f"🔍 Document {i+1}: content='{content_field[:50] if content_field else 'None'}...', snippet='{snippet_field[:50]}...'")
+                        
+                        content = content_field or snippet_field
+                        if content:
+                            # Limit content length and clean up HTML entities
+                            content = content.replace("&#39;", "'").replace("&quot;", '"')
+                            content = content[:400] + "..." if len(content) > 400 else content
+                            relevant_knowledge.append(content)
+                            logger.info(f"✅ Added content from document {i+1}: {len(content)} characters")
+                        else:
+                            logger.warning(f"⚠️ Document {i+1} has no content or snippet")
+                    
+                    if relevant_knowledge:
+                        rag_context = "\n\n".join(relevant_knowledge)
+                        logger.info(f"✅ RAG enhanced with {len(relevant_knowledge)} knowledge pieces from direct Vertex Search")
+                        return f"\n\nRelevant knowledge context:\n{rag_context}"
+                    else:
+                        logger.warning("⚠️ No usable content found in search results")
+                else:
+                    logger.info(f"🔍 Direct Vertex Search error or no results: {search_result.get('message', 'No results')}")
+            else:
+                logger.warning("🔍 Vertex Search service not available for RAG")
+            
+            return ""
+            
+        except Exception as e:
+            logger.error(f"Error in Vertex Search RAG: {e}")
+            return ""
+    
+    async def generate_response(self, request_data: Dict[str, Any], user_token: str = None) -> Dict[str, Any]:
         """Generate AI response with all optimizations"""
         
         # Ensure service is ready
@@ -380,7 +525,10 @@ Respond with a structured JSON containing:
             
             # Build enhanced prompt
             base_prompt = self._build_prompt(request_data)
-            rag_context = self._enhance_with_rag(request_data)
+            logger.info("🔍 About to call RAG async function...")
+            # Use Vertex Search RAG with user authentication token
+            rag_context = await self._enhance_with_rag_async(request_data, user_token)
+            logger.info(f"🔍 RAG function returned {len(rag_context)} characters")
             
             full_prompt = f"{self.master_prompt}\n\n{base_prompt}{rag_context}"
             

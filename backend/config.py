@@ -43,9 +43,10 @@ class Settings(BaseSettings):
     vertex_data_store_id: str = Field(default="")
     vertex_engine_id: str = Field(default="")
     vertex_serving_config: str = Field(default="default_search")
+    vertex_rag_corpus_id: str = Field(default="")
     
     # Feature Flags
-    enable_rag: bool = Field(default=True)
+    enable_rag: bool = Field(default=False)
     enable_diversity: bool = Field(default=True)
     enable_self_critique: bool = Field(default=True)
     

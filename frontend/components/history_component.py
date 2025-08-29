@@ -27,7 +27,7 @@ def render_history_interface(token: str, user_data: Dict[str, Any]) -> None:
         return
     
     # History controls and filters
-    render_history_controls(prompts)
+    render_history_controls(prompts, token)
     
     # Display prompts
     render_prompt_list(prompts, token)
@@ -63,10 +63,10 @@ def render_empty_state():
             st.session_state["aispark_current_page"] = "generate"
             st.rerun()
 
-def render_history_controls(prompts: List[Dict]):
+def render_history_controls(prompts: List[Dict], token: str):
     """Render filtering and search controls"""
     
-    col1, col2, col3 = st.columns([2, 1, 1])
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
     
     with col1:
         search_query = st.text_input(
@@ -88,6 +88,10 @@ def render_history_controls(prompts: List[Dict]):
             ["Newest First", "Oldest First", "Favorites"],
             key="sort_order"
         )
+    
+    with col4:
+        # Export controls
+        render_export_controls(token)
     
     # Show statistics
     render_library_stats(prompts)
@@ -252,3 +256,74 @@ def use_as_template(prompt: Dict):
     st.success("🔄 Template loaded! Switched to generator.")
     time.sleep(1)
     st.rerun()
+
+def render_export_controls(token: str):
+    """Render export functionality controls"""
+    
+    export_format = st.selectbox(
+        "💾 Export",
+        ["Choose format...", "JSON", "CSV", "TXT"],
+        key="export_format",
+        help="Export your prompts to file"
+    )
+    
+    if export_format != "Choose format...":
+        favorites_only = st.checkbox(
+            "⭐ Favorites only",
+            key="export_favorites_only",
+            help="Export only favorite prompts"
+        )
+        
+        if st.button("📥 Download", key="export_download", use_container_width=True):
+            perform_export(token, export_format.lower(), favorites_only)
+
+def perform_export(token: str, format: str, favorites_only: bool = False):
+    """Perform the export operation"""
+    
+    from .api_helper import api_client
+    
+    with st.spinner(f"📦 Preparing {format.upper()} export..."):
+        try:
+            content = api_client.export_prompts(format, token, 0, 1000, favorites_only)
+            
+            if content.startswith("Authentication failed"):
+                st.error("❌ Authentication failed. Please login again.")
+                return
+            
+            if content.startswith("No prompts found"):
+                st.warning("⚠️ No prompts found to export.")
+                return
+            
+            if content.startswith("Export failed") or content.startswith("Export error"):
+                st.error(f"❌ {content}")
+                return
+            
+            # Determine file extension and MIME type
+            if format == "json":
+                mime_type = "application/json"
+                file_ext = "json"
+            elif format == "csv":
+                mime_type = "text/csv"
+                file_ext = "csv"
+            else:  # txt
+                mime_type = "text/plain"
+                file_ext = "txt"
+            
+            # Generate filename with timestamp
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            suffix = "_favorites" if favorites_only else ""
+            filename = f"aispark_prompts{suffix}_{timestamp}.{file_ext}"
+            
+            # Create download button
+            st.download_button(
+                label=f"📄 Download {filename}",
+                data=content,
+                file_name=filename,
+                mime=mime_type,
+                help=f"Download your prompts as {format.upper()} file"
+            )
+            
+            st.success(f"✅ Export ready! Click the download button above to save your {format.upper()} file.")
+            
+        except Exception as e:
+            st.error(f"❌ Export failed: {str(e)}")
