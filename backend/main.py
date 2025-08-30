@@ -20,6 +20,8 @@ from services.unified_ai_service import ai_service
 from services.unified_critic_service import critic_service, AnalysisType
 from services.vertex_search_service import vertex_search_service
 from services.export_service import export_service
+from core.character_lock import character_manager, CharacterSheet
+from core.helios_personalities import helios_system, PersonalityType
 from utils.health_check import get_health_status, get_quick_health
 
 # Configure logging
@@ -306,6 +308,407 @@ def export_prompts(
     except Exception as e:
         logger.error(f"Export error: {e}")
         raise HTTPException(status_code=500, detail="Export failed")
+
+# Character Lock System Endpoints
+
+@app.post("/characters/create")
+def create_character(
+    character_data: Dict[str, Any],
+    current_user: models.User = Depends(get_current_user)
+):
+    """Create a new character for video consistency"""
+    try:
+        # Add user association
+        character_data["created_by"] = current_user.id
+        
+        character = character_manager.create_character(character_data)
+        return {
+            "success": True,
+            "character": character.to_dict(),
+            "message": f"Character '{character.name}' created successfully"
+        }
+    except Exception as e:
+        logger.error(f"Character creation error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to create character")
+
+@app.get("/characters/list")
+def list_characters(current_user: models.User = Depends(get_current_user)):
+    """List all available characters"""
+    try:
+        characters = character_manager.get_all_characters()
+        return {
+            "success": True,
+            "characters": [char.to_dict() for char in characters],
+            "total": len(characters)
+        }
+    except Exception as e:
+        logger.error(f"Character listing error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list characters")
+
+@app.get("/characters/{character_id}")
+def get_character(
+    character_id: str,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get specific character details"""
+    character = character_manager.get_character(character_id)
+    if not character:
+        raise HTTPException(status_code=404, detail="Character not found")
+    
+    return {
+        "success": True,
+        "character": character.to_dict()
+    }
+
+@app.put("/characters/{character_id}")
+def update_character(
+    character_id: str,
+    updates: Dict[str, Any],
+    current_user: models.User = Depends(get_current_user)
+):
+    """Update existing character"""
+    try:
+        character = character_manager.update_character(character_id, updates)
+        if not character:
+            raise HTTPException(status_code=404, detail="Character not found")
+        
+        return {
+            "success": True,
+            "character": character.to_dict(),
+            "message": f"Character '{character.name}' updated successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Character update error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to update character")
+
+@app.delete("/characters/{character_id}")
+def delete_character(
+    character_id: str,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Delete character"""
+    try:
+        success = character_manager.delete_character(character_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Character not found")
+        
+        return {
+            "success": True,
+            "message": "Character deleted successfully"
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Character deletion error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete character")
+
+@app.post("/characters/{character_id}/lock")
+def lock_character(
+    character_id: str,
+    session_id: str = Header(..., alias="X-Session-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Lock character for session consistency"""
+    try:
+        success = character_manager.lock_character_for_session(session_id, character_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Character not found")
+        
+        character = character_manager.get_character(character_id)
+        return {
+            "success": True,
+            "message": f"Character '{character.name}' locked for session",
+            "session_id": session_id,
+            "character_id": character_id
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Character lock error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to lock character")
+
+@app.delete("/characters/unlock")
+def unlock_character(
+    session_id: str = Header(..., alias="X-Session-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Release character lock for session"""
+    try:
+        success = character_manager.release_session_lock(session_id)
+        return {
+            "success": True,
+            "message": "Character lock released" if success else "No active lock found",
+            "session_id": session_id
+        }
+    except Exception as e:
+        logger.error(f"Character unlock error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to unlock character")
+
+@app.get("/characters/session/current")
+def get_session_character(
+    session_id: str = Header(..., alias="X-Session-ID"),
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get currently locked character for session"""
+    character = character_manager.get_session_character(session_id)
+    if not character:
+        return {
+            "success": True,
+            "character": None,
+            "message": "No character locked for this session"
+        }
+    
+    return {
+        "success": True,
+        "character": character.to_dict(),
+        "session_id": session_id
+    }
+
+@app.get("/characters/stats")
+def get_character_stats(current_user: models.User = Depends(get_current_user)):
+    """Get character usage statistics"""
+    try:
+        stats = character_manager.get_stats()
+        return {
+            "success": True,
+            "stats": stats
+        }
+    except Exception as e:
+        logger.error(f"Character stats error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get character stats")
+
+# Helios Master Prompt System Endpoints
+
+@app.post("/helios/analyze")
+def analyze_prompt_request(
+    prompt_request: Dict[str, Any],
+    current_user: models.User = Depends(get_current_user)
+):
+    """Analyze user prompt request for optimal personality selection"""
+    try:
+        user_prompt = prompt_request.get("prompt", "")
+        context = prompt_request.get("context", {})
+        
+        if not user_prompt:
+            raise HTTPException(status_code=400, detail="Prompt is required")
+        
+        # Analyze request
+        analysis = helios_system.analyze_request(user_prompt, context)
+        
+        # Select personality
+        primary, secondary, reasoning = helios_system.select_personality(analysis)
+        
+        return {
+            "success": True,
+            "analysis": analysis,
+            "personality_selection": {
+                "primary": {
+                    "type": primary.value,
+                    "profile": helios_system.personalities[primary].__dict__
+                },
+                "secondary": [
+                    {
+                        "type": p.value,
+                        "profile": helios_system.personalities[p].__dict__
+                    } for p in secondary
+                ],
+                "reasoning": reasoning
+            }
+        }
+    except Exception as e:
+        logger.error(f"Helios analysis error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to analyze prompt request")
+
+@app.post("/helios/enhance")
+def enhance_with_personality(
+    enhancement_request: Dict[str, Any],
+    current_user: models.User = Depends(get_current_user)
+):
+    """Enhance prompt using specific Helios personality"""
+    try:
+        base_prompt = enhancement_request.get("prompt", "")
+        personality_name = enhancement_request.get("personality", "athena")
+        
+        if not base_prompt:
+            raise HTTPException(status_code=400, detail="Base prompt is required")
+        
+        # Convert personality name to enum
+        try:
+            personality = PersonalityType(personality_name.lower())
+        except ValueError:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Invalid personality. Valid options: {[p.value for p in PersonalityType]}"
+            )
+        
+        # Enhance prompt
+        enhanced_prompt = helios_system.get_personality_prompt_enhancement(personality, base_prompt)
+        signature_elements = helios_system.get_personality_signature_elements(personality)
+        context = helios_system.generate_personality_context(personality)
+        
+        return {
+            "success": True,
+            "original_prompt": base_prompt,
+            "enhanced_prompt": enhanced_prompt,
+            "personality": {
+                "name": personality.value,
+                "profile": helios_system.personalities[personality].__dict__
+            },
+            "signature_elements": signature_elements,
+            "personality_context": context
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Helios enhancement error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to enhance prompt")
+
+@app.get("/helios/personalities")
+def list_personalities(current_user: models.User = Depends(get_current_user)):
+    """List all available Helios personalities"""
+    try:
+        personalities = {}
+        for personality_type, profile in helios_system.personalities.items():
+            personalities[personality_type.value] = {
+                "name": profile.name,
+                "symbol": profile.symbol,
+                "title": profile.title,
+                "specialization": profile.specialization,
+                "traits": profile.traits,
+                "signature_elements": profile.signature_elements,
+                "language_style": profile.language_style,
+                "strengths": profile.strengths
+            }
+        
+        return {
+            "success": True,
+            "personalities": personalities,
+            "total_count": len(personalities)
+        }
+    except Exception as e:
+        logger.error(f"Helios personalities listing error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to list personalities")
+
+@app.get("/helios/personality/{personality_name}")
+def get_personality_details(
+    personality_name: str,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Get detailed information about specific personality"""
+    try:
+        try:
+            personality = PersonalityType(personality_name.lower())
+        except ValueError:
+            raise HTTPException(
+                status_code=404, 
+                detail=f"Personality '{personality_name}' not found. Valid options: {[p.value for p in PersonalityType]}"
+            )
+        
+        profile = helios_system.personalities[personality]
+        
+        return {
+            "success": True,
+            "personality": {
+                "type": personality.value,
+                "name": profile.name,
+                "symbol": profile.symbol,
+                "title": profile.title,
+                "specialization": profile.specialization,
+                "traits": profile.traits,
+                "signature_elements": profile.signature_elements,
+                "language_style": profile.language_style,
+                "strengths": profile.strengths
+            }
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Helios personality details error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get personality details")
+
+@app.get("/helios/stats")
+def get_helios_stats(current_user: models.User = Depends(get_current_user)):
+    """Get Helios personality selection statistics"""
+    try:
+        stats = helios_system.get_selection_stats()
+        
+        return {
+            "success": True,
+            "stats": stats,
+            "system_info": {
+                "total_personalities": len(helios_system.personalities),
+                "personality_names": [p.value for p in PersonalityType]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Helios stats error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to get Helios stats")
+
+@app.post("/helios/auto-generate")
+async def auto_generate_with_helios(
+    generation_request: schemas.GenerationRequest,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Generate prompt with automatic Helios personality selection"""
+    try:
+        # Analyze request for personality selection
+        analysis = helios_system.analyze_request(generation_request.prompt, {
+            "style": generation_request.style,
+            "type": generation_request.type,
+            "tool": generation_request.tool
+        })
+        
+        # Select optimal personality
+        primary, secondary, reasoning = helios_system.select_personality(analysis)
+        
+        # Enhance prompt with personality
+        enhanced_prompt = helios_system.get_personality_prompt_enhancement(
+            primary, generation_request.prompt
+        )
+        
+        # Create enhanced generation request
+        enhanced_request = schemas.GenerationRequest(
+            prompt=enhanced_prompt,
+            negative_prompt=generation_request.negative_prompt,
+            style=generation_request.style,
+            type=generation_request.type,
+            tool=generation_request.tool,
+            diversity_enabled=generation_request.diversity_enabled,
+            rag_enabled=generation_request.rag_enabled
+        )
+        
+        # Generate with enhanced prompt
+        result = await ai_service.generate_prompt(enhanced_request)
+        
+        # Add Helios metadata
+        if result.get("_metadata"):
+            result["_metadata"]["helios"] = {
+                "primary_personality": primary.value,
+                "secondary_personalities": [p.value for p in secondary],
+                "selection_reasoning": reasoning,
+                "original_prompt": generation_request.prompt,
+                "enhanced_prompt": enhanced_prompt
+            }
+        
+        # Save to database
+        try:
+            prompt_obj = crud.create_prompt(db, result, current_user.id)
+            logger.info(f"✅ Helios-enhanced prompt created: ID {prompt_obj.id} for user {current_user.id}")
+            result["id"] = prompt_obj.id
+            result["created_at"] = prompt_obj.created_at.isoformat()
+        except Exception as db_error:
+            logger.error(f"Database error: {db_error}")
+        
+        return result
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Helios auto-generate error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to generate with Helios personality")
 
 if __name__ == "__main__":
     import uvicorn

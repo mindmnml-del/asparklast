@@ -45,6 +45,16 @@ class StudioRequest(BaseModel):
     use_rag: bool = True
     user_language: str = 'en'
 
+class GenerationRequest(BaseModel):
+    """Schema for AI prompt generation request"""
+    prompt: str = Field(..., min_length=3, description="User prompt for generation")
+    negative_prompt: Optional[str] = ""
+    style: str = "professional"
+    type: str = Field(default="image", pattern="^(image|video|universal)$")
+    tool: str = "Universal"
+    diversity_enabled: bool = True
+    rag_enabled: bool = True
+
 class CriticAnalysisRequest(BaseModel):
     """Schema for critic analysis request"""
     prompt: str = Field(..., min_length=10)
