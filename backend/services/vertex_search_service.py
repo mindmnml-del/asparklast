@@ -66,15 +66,25 @@ class VertexSearchService:
                 self.client = discoveryengine.SearchServiceClient()
                 logger.info("Using default credentials")
             
-            # Build serving config path - use engine_id if available, otherwise data_store_id
-            engine_id = settings.vertex_engine_id or settings.vertex_data_store_id
-            self.serving_config_path = (
-                f"projects/{settings.vertex_project_id}"
-                f"/locations/{settings.vertex_location}"
-                f"/collections/default_collection"
-                f"/engines/{engine_id}"
-                f"/servingConfigs/{settings.vertex_serving_config}"
-            )
+            # Build serving config path - try dataStores first, then engines
+            if settings.vertex_engine_id:
+                # Use engine_id if explicitly set
+                self.serving_config_path = (
+                    f"projects/{settings.vertex_project_id}"
+                    f"/locations/{settings.vertex_location}"
+                    f"/collections/default_collection"
+                    f"/engines/{settings.vertex_engine_id}"
+                    f"/servingConfigs/{settings.vertex_serving_config}"
+                )
+            else:
+                # Use dataStores path with data_store_id
+                self.serving_config_path = (
+                    f"projects/{settings.vertex_project_id}"
+                    f"/locations/{settings.vertex_location}"
+                    f"/collections/default_collection"
+                    f"/dataStores/{settings.vertex_data_store_id}"
+                    f"/servingConfigs/{settings.vertex_serving_config}"
+                )
             
             self._initialized = True
             logger.info("Vertex AI Search service initialized successfully")

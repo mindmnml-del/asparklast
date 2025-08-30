@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     vertex_rag_corpus_id: str = Field(default="")
     
     # Feature Flags
-    enable_rag: bool = Field(default=False)
+    enable_rag: bool = Field(default=True)
     enable_diversity: bool = Field(default=True)
     enable_self_critique: bool = Field(default=True)
     
