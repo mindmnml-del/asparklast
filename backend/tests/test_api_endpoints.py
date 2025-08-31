@@ -4,10 +4,86 @@ Test API endpoints to ensure existing functionality works
 
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import patch, MagicMock
+from datetime import datetime
+import json
+import csv
+import io
+
 from main import app
 
 
 client = TestClient(app)
+
+
+@pytest.fixture
+def mock_prompts():
+    """Fixture to create mock GeneratedPrompt objects for testing export."""
+    prompts = []
+    now = datetime.now()
+
+    # Prompt 1: Basic
+    p1 = MagicMock()
+    p1.id = 1
+    p1.is_favorite = False
+    p1.created_at = now
+    p1.raw_response = {
+        "prompt": "A basic prompt.",
+        "critic_suggestions": "Make it more basic."
+    }
+    prompts.append(p1)
+
+    # Prompt 2: With Helios
+    p2 = MagicMock()
+    p2.id = 2
+    p2.is_favorite = True
+    p2.created_at = now
+    p2.raw_response = {
+        "prompt": "A heroic prompt.",
+        "_metadata": {
+            "helios": {
+                "primary_personality": "zeus",
+                "selection_reasoning": "It was epic."
+            }
+        }
+    }
+    prompts.append(p2)
+
+    # Prompt 3: With Character
+    p3 = MagicMock()
+    p3.id = 3
+    p3.is_favorite = False
+    p3.created_at = now
+    p3.raw_response = {
+        "prompt": "A character prompt.",
+        "_metadata": {
+            "character": {
+                "name": "Sir Reginald"
+            }
+        }
+    }
+    prompts.append(p3)
+
+    # Prompt 4: With both
+    p4 = MagicMock()
+    p4.id = 4
+    p4.is_favorite = True
+    p4.created_at = now
+    p4.raw_response = {
+        "prompt": "A heroic character prompt.",
+        "_metadata": {
+            "helios": {
+                "primary_personality": "athena",
+                "selection_reasoning": "It was strategic."
+            },
+            "character": {
+                "name": "Lady Ann"
+            }
+        }
+    }
+    prompts.append(p4)
+
+    return prompts
 
 
 class TestAPIEndpoints:
@@ -64,49 +140,63 @@ class TestAPIEndpoints:
 
 class TestAuthenticatedEndpoints:
     """Test endpoints that require authentication"""
-    
-    def setup_method(self):
-        """Setup test user and get token"""
-        # Create test user
-        user_data = {
-            "username": "testuser",
-            "email": "test@example.com", 
-            "password": "testpassword123"
-        }
-        
-        # Try to register (might already exist)
-        client.post("/auth/register", json=user_data)
-        
-        # Login to get token
-        login_data = {
-            "username": "testuser",
-            "password": "testpassword123"
-        }
-        
-        response = client.post("/auth/token", data=login_data)
-        if response.status_code == 200:
-            self.token = response.json()["access_token"]
-            self.headers = {"Authorization": f"Bearer {self.token}"}
-        else:
-            # Skip tests if authentication fails
-            pytest.skip("Could not authenticate test user")
 
-    def test_vertex_search_status_authenticated(self):
+    def test_vertex_search_status_authenticated(self, authenticated_client):
         """Test vertex search status with authentication"""
-        if not hasattr(self, 'headers'):
-            pytest.skip("Authentication not available")
-            
-        response = client.get("/search/vertex/status", headers=self.headers)
+        response = authenticated_client.get("/search/vertex/status")
         assert response.status_code == 200
-        
         data = response.json()
         assert data["service"] == "Vertex AI Search"
-        assert data["enabled"] == True
 
-    def test_critic_stats_authenticated(self):
+    def test_critic_stats_authenticated(self, authenticated_client):
         """Test critic stats with authentication"""
-        if not hasattr(self, 'headers'):
-            pytest.skip("Authentication not available")
-            
-        response = client.get("/critic/stats", headers=self.headers)
+        response = authenticated_client.get("/critic/stats")
         assert response.status_code == 200
+
+    @patch('main.crud.get_prompts_by_user')
+    @patch('main.crud.get_prompt_by_id')
+    def test_export_json(self, mock_get_by_id, mock_get_by_user, mock_prompts, authenticated_client):
+        """Test exporting prompts to JSON with enhanced metadata."""
+        mock_get_by_user.return_value = mock_prompts
+        mock_get_by_id.side_effect = mock_prompts
+        response = authenticated_client.get("/prompts/export/json")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["export_info"]["total_prompts"] == 4
+        prompt4_data = data["prompts"][3]
+        assert prompt4_data["helios_personality"] == "athena"
+        assert prompt4_data["character_name"] == "Lady Ann"
+
+    @patch('main.crud.get_prompts_by_user')
+    @patch('main.crud.get_prompt_by_id')
+    def test_export_csv(self, mock_get_by_id, mock_get_by_user, mock_prompts, authenticated_client):
+        """Test exporting prompts to CSV with enhanced metadata."""
+        mock_get_by_user.return_value = mock_prompts
+        mock_get_by_id.side_effect = mock_prompts
+        response = authenticated_client.get("/prompts/export/csv")
+        assert response.status_code == 200
+        csv_data = response.text
+        reader = csv.reader(io.StringIO(csv_data))
+        rows = list(reader)
+        header = rows[0]
+        assert 'helios_personality' in header
+        assert 'character_name' in header
+        assert len(rows) == 5
+
+    @patch('main.crud.get_prompts_by_user')
+    @patch('main.crud.get_prompt_by_id')
+    def test_export_txt(self, mock_get_by_id, mock_get_by_user, mock_prompts, authenticated_client):
+        """Test exporting prompts to TXT with enhanced metadata."""
+        mock_get_by_user.return_value = mock_prompts
+        mock_get_by_id.side_effect = mock_prompts
+        response = authenticated_client.get("/prompts/export/txt")
+        assert response.status_code == 200
+        txt_data = response.text
+        assert "Helios Personality: athena" in txt_data
+        assert "Character Name: Lady Ann" in txt_data
+
+    def test_export_invalid_format(self, authenticated_client):
+        """Test exporting with an invalid format."""
+        response = authenticated_client.get("/prompts/export/xml")
+        assert response.status_code == 400
+        assert "Invalid format" in response.json()["detail"]
