@@ -45,7 +45,7 @@ def render_generation_form(token: str) -> Optional[Dict[str, Any]]:
         # Core input
         subject_action = st.text_area(
             "✨ Describe what you want to create",
-            placeholder="A majestic dragon soaring through crystal mountains at sunset, breathing colorful magical fire...",
+            placeholder="A majestic dragon soaring through snow-capped mountains at sunset, breathing colorful magical fire...",
             height=120,
             help="Be as descriptive as possible. Include details about the subject, action, and setting.",
             key="subject_input",
@@ -498,10 +498,11 @@ def _smart_inspiration(prompt_type: str, available_styles: List[str], theme: Opt
         "dancing within", "guarding", "transforming", "awakening in"
     ]
     environments = [
-        "crystalline caverns", "rain-soaked neon alleyways", "ancient temple ruins",
+        "ancient temple ruins", "rain-soaked neon alleyways", "abandoned observatory", 
         "floating islands at dusk", "submerged coral city", "glacier-lit fjords",
-        "bioluminescent jungle", "abandoned observatory", "clockwork cathedral",
-        "windswept desert monoliths", "orbital shipyards", "misty bamboo forest"
+        "bioluminescent jungle", "clockwork cathedral", "windswept desert monoliths", 
+        "orbital shipyards", "misty bamboo forest", "enchanted garden maze",
+        "volcanic glass formations", "underwater ruins", "cyberpunk rooftops"
     ]
     moods = [
         "epic and awe-inspiring", "mysterious and tense", "serene and contemplative",
@@ -516,7 +517,7 @@ def _smart_inspiration(prompt_type: str, available_styles: List[str], theme: Opt
     THEME_BANKS = {
             "Fantasy": {
                 "subjects": ["ancient dragon", "forest druid", "phoenix knight", "elf archer", "rune golem"],
-                "environments": ["enchanted grove", "crystalline caverns", "floating isles", "ancient temple ruins"],
+                "environments": ["enchanted grove", "mystical forest clearing", "floating isles", "ancient temple ruins"],
                 "moods": ["epic and awe-inspiring", "mystical and serene", "ominous and arcane"],
                 "lightings": ["golden hour backlight", "moonlit glow", "volumetric god rays"],
                 "style_pairs": [["Fantasy", "Cinematic"], ["Art Nouveau", "Impressionist"]]
@@ -646,19 +647,28 @@ def fill_random_inspiration(prompt_type: str = "image", theme: Optional[str] = N
     history_key = "aispark_inspiration_history"
     history = st.session_state.get(history_key, [])
 
-    # Try a few times to avoid immediate repeats
+    # Try many times to avoid ALL repeats and get truly unique inspiration
     candidate = None
-    for _ in range(10):
+    for _ in range(50):  # Increased attempts dramatically
         cand = _smart_inspiration(prompt_type, available_styles, theme)
-        if cand not in history[-5:]:
+        # Check if this exact combination was used before
+        cand_signature = f"{cand.get('subject', '')}-{'-'.join(cand.get('styles', []))}-{cand.get('mood', '')}"
+        history_signatures = [f"{h.get('subject', '')}-{'-'.join(h.get('styles', []))}-{h.get('mood', '')}" for h in history[-15:]]
+        
+        if cand_signature not in history_signatures:
             candidate = cand
             break
+    
     if candidate is None:
-        candidate = cand  # fallback
+        # Force completely new inspiration if still matching
+        candidate = _smart_inspiration(prompt_type, available_styles, theme)
+        # Add timestamp to ensure uniqueness
+        import time
+        candidate["subject"] = f"{candidate['subject']}, unique variation {int(time.time() % 10000)}"
 
-    st.session_state[history_key] = (history + [candidate])[-20:]
+    st.session_state[history_key] = (history + [candidate])[-25:]  # Keep more history
     st.session_state["aispark_inspiration"] = candidate
-    st.success("🎲 Smart inspiration applied! You can tweak fields or generate again.")
+    st.success("🎲 Unique inspiration generated! Fresh and creative ideas applied.")
 
 def render_recent_generations():
     """Show recent generations in sidebar"""

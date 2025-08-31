@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     vertex_serving_config: str = Field(default="default_search")
     vertex_rag_corpus_id: str = Field(default="")
     
+    # Google Cloud Authentication
+    google_application_credentials: str = Field(default="")
+    google_cloud_project: str = Field(default="")
+    
     # Feature Flags
     enable_rag: bool = Field(default=True)
     enable_diversity: bool = Field(default=True)
@@ -95,6 +99,11 @@ def get_knowledge_base_path() -> Path:
 
 def get_master_prompt_path() -> Path:
     """Get the master prompt file path"""
+    # First try prompts directory (new location)
+    prompts_path = get_project_root() / "backend" / "prompts" / settings.master_prompt_file
+    if prompts_path.exists():
+        return prompts_path
+    # Fallback to old knowledge_base location
     return get_knowledge_base_path() / settings.master_prompt_file
 
 def validate_api_key() -> bool:

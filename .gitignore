@@ -70,3 +70,18 @@ env/
 *.pem
 backend/.env
 frontend-v3/.env
+
+# Google Cloud Credentials - NEVER COMMIT
+backend/prompt-studio-final1-d373010defde.json
+backend/streamlit-vertex-key.json
+*-credentials.json
+*-key.json
+service-account*.json
+
+# Database files - runtime data
+backend/*.db-shm
+backend/*.db-wal
+backend/aispark_studio.db
+
+# Claude settings
+.claude/settings.local.json

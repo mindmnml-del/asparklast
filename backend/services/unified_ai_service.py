@@ -127,20 +127,20 @@ class UnifiedAIService:
             return False
     
     def _load_master_prompt(self) -> None:
-        """Load the master prompt from file"""
+        """Load the Helios master prompt from file"""
         try:
             master_path = get_master_prompt_path()
             if master_path.exists():
                 with open(master_path, 'r', encoding='utf-8') as f:
                     self.master_prompt = f.read().strip()
-                logger.info(f"✅ Master prompt loaded: {len(self.master_prompt)} characters")
+                logger.info(f"✅ Helios Master Prompt loaded: {len(self.master_prompt)} characters")
             else:
                 # Fallback master prompt
                 self.master_prompt = self._get_fallback_master_prompt()
-                logger.warning("⚠️ Master prompt file not found, using fallback")
+                logger.warning("⚠️ Helios master prompt file not found, using fallback")
         except Exception as e:
             self.master_prompt = self._get_fallback_master_prompt()
-            logger.error(f"❌ Error loading master prompt: {e}")
+            logger.error(f"❌ Error loading Helios master prompt: {e}")
     
     def _get_fallback_master_prompt(self) -> str:
         """Fallback master prompt if file not found"""
@@ -436,21 +436,24 @@ Respond with a structured JSON containing:
             return ""
         
         try:
-            # Extract search query from request
-            styles = request_data.get("artistic_styles", [])
-            subject = request_data.get("subject_action", "")
-            
-            # Build search query from request data
-            search_terms = []
-            if styles:
-                search_terms.extend(styles)
-            if subject:
-                search_terms.append(subject)
-            
-            if not search_terms:
-                return ""
-            
+            # Simple broad search terms that will match our knowledge base
+            search_terms = ["video", "generation", "prompt", "technique", "style"]
             search_query = " ".join(search_terms)
+            
+            # If Georgian text, translate key terms to English for better search results
+            if any(ord(c) >= 0x10D0 and ord(c) <= 0x10FF for c in search_query):
+                # Simple Georgian to English mapping for common video/photo terms
+                georgian_to_english = {
+                    "ვიდეო": "video", "ფოტო": "photo", "პრომპტ": "prompt", 
+                    "აპლიკაცია": "application", "ლოგო": "logo", "გენერაცია": "generation",
+                    "ტექნიკა": "technique", "სტილი": "style", "ეფექტი": "effect"
+                }
+                english_terms = []
+                for term in search_terms:
+                    english_term = georgian_to_english.get(term, term)
+                    english_terms.append(english_term)
+                search_query = " ".join(english_terms)
+            
             logger.info(f"🔍 RAG async search query: {search_query}")
             
             # Use Discovery Engine with service account credentials
@@ -613,10 +616,51 @@ Respond with a structured JSON containing:
     
     def _process_response(self, response, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """Process the AI response into structured format"""
-        print(f"DEBUG: RAW AI RESPONSE TEXT: {response.text}")
+        
+        # ROBUST response parsing for Google Generative AI
+        response_text = ""
         
         try:
-            response_text = response.text.strip()
+            # Method 1: Direct text access
+            if hasattr(response, 'text'):
+                response_text = response.text.strip()
+                logger.debug("Used direct text access")
+        except Exception as e1:
+            logger.debug(f"Direct text failed: {e1}")
+            try:
+                # Method 2: Candidates approach
+                if hasattr(response, 'candidates') and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'content') and hasattr(candidate.content, 'parts'):
+                        parts_text = []
+                        for part in candidate.content.parts:
+                            if hasattr(part, 'text') and part.text:
+                                parts_text.append(part.text)
+                        response_text = "".join(parts_text).strip()
+                        logger.debug("Used candidates parts approach")
+            except Exception as e2:
+                logger.debug(f"Candidates approach failed: {e2}")
+                try:
+                    # Method 3: Alternative parts access
+                    if hasattr(response, 'parts') and response.parts:
+                        parts_text = []
+                        for part in response.parts:
+                            if hasattr(part, 'text'):
+                                parts_text.append(part.text)
+                        response_text = "".join(parts_text).strip()
+                        logger.debug("Used direct parts approach")
+                except Exception as e3:
+                    logger.error(f"All parsing methods failed: {e1}, {e2}, {e3}")
+                    response_text = "Error: Unable to parse AI response - please try again"
+        
+        # Validate we got actual text content
+        if not response_text or response_text.startswith("<google.generativeai"):
+            response_text = "Error: AI response parsing failed - please regenerate"
+        
+        logger.info(f"Final parsed text length: {len(response_text)} characters")
+        print(f"DEBUG: PARSED RESPONSE TEXT: {response_text[:200]}...")
+        
+        try:
             
             # Try to parse JSON response
             if response_text.startswith('{') and response_text.endswith('}'):
