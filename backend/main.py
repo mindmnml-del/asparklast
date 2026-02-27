@@ -138,6 +138,9 @@ async def generate(
     current_user: models.User = Depends(get_current_user)
 ):
     try:
+        if current_user.credits < 1:
+            raise HTTPException(status_code=402, detail="Insufficient credits. Please purchase more credits to continue.")
+            
         # Extract token from Authorization header for RAG authentication
         user_token = None
         if authorization and authorization.startswith("Bearer "):
@@ -151,6 +154,10 @@ async def generate(
         prompt = crud.create_generated_prompt(db, response, current_user.id)
         if not prompt:
             raise HTTPException(status_code=500, detail="Failed to save prompt")
+        
+        # Deduct a credit
+        current_user.credits -= 1
+        db.commit()
         
         return prompt
     except HTTPException:
@@ -654,6 +661,9 @@ async def auto_generate_with_helios(
 ):
     """Generate prompt with automatic Helios personality selection"""
     try:
+        if current_user.credits < 1:
+            raise HTTPException(status_code=402, detail="Insufficient credits. Please purchase more credits to continue.")
+            
         # Analyze request for personality selection
         analysis = helios_system.analyze_request(generation_request.prompt, {
             "style": generation_request.style,
@@ -695,12 +705,17 @@ async def auto_generate_with_helios(
         
         # Save to database
         try:
-            prompt_obj = crud.create_prompt(db, result, current_user.id)
+            prompt_obj = crud.create_generated_prompt(db, result, current_user.id)
             logger.info(f"✅ Helios-enhanced prompt created: ID {prompt_obj.id} for user {current_user.id}")
             result["id"] = prompt_obj.id
             result["created_at"] = prompt_obj.created_at.isoformat()
+            
+            # Deduct credit
+            current_user.credits -= 1
+            db.commit()
         except Exception as db_error:
             logger.error(f"Database error: {db_error}")
+            db.rollback()
         
         return result
         
