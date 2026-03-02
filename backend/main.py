@@ -170,10 +170,11 @@ async def generate(
 def get_prompts(
     skip: int = 0,
     limit: int = 20,
+    favorites_only: bool = False,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
-    return crud.get_prompts_by_user(db, current_user.id, skip, limit)
+    return crud.get_prompts_by_user(db, current_user.id, skip, limit, favorites_only)
 
 @app.get("/prompts/{prompt_id}", response_model=schemas.GeneratedPrompt)
 def get_prompt(
@@ -185,6 +186,29 @@ def get_prompt(
     if not prompt:
         raise HTTPException(status_code=404, detail="Prompt not found")
     return prompt
+
+@app.put("/prompts/{prompt_id}/favorite", response_model=schemas.GeneratedPrompt)
+def toggle_favorite(
+    prompt_id: int,
+    is_favorite: bool,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    prompt = crud.update_prompt_favorite_status(db, prompt_id, current_user.id, is_favorite)
+    if not prompt:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return prompt
+
+@app.delete("/prompts/{prompt_id}")
+def delete_prompt(
+    prompt_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    success = crud.delete_prompt(db, prompt_id, current_user.id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Prompt not found")
+    return {"success": True}
 
 @app.get("/search/vertex")
 async def vertex_search(
