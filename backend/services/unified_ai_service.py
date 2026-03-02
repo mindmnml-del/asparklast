@@ -334,31 +334,24 @@ Respond with a structured JSON containing:
         """Enhance prompt with RAG knowledge using Vertex Search"""
         if not settings.enable_rag:
             return ""
-        
+
         try:
             # Import vertex search service
             from services.vertex_search_service import vertex_search_service
-            
-            # Extract search query from request
-            styles = request_data.get("artistic_styles", [])
-            subject = request_data.get("subject_action", "")
-            
-            # Build search query from request data
-            search_terms = []
-            if styles:
-                search_terms.extend(styles)
-            if subject:
-                search_terms.append(subject)
-            
+
+            # Dynamically extract search terms from the user's request
+            search_terms = self._extract_search_terms(request_data)
+
             if not search_terms:
                 return ""
-            
+
             search_query = " ".join(search_terms)
             logger.debug(f"RAG search query: {search_query}")
-            
+
             # Check if vertex search is available
             if not vertex_search_service.is_available():
-                logger.warning("Vertex Search not available for RAG")
+                logger.warning("⚠️ Vertex credentials missing or service unavailable, skipping RAG. "
+                             "Generation will continue without knowledge base context.")
                 return ""
             
             # Perform search using asyncio
@@ -430,30 +423,74 @@ Respond with a structured JSON containing:
         
         return ""
     
+    def _extract_search_terms(self, request_data: Dict[str, Any]) -> List[str]:
+        """Extract dynamic search terms from the user's request data for RAG queries"""
+        terms = []
+
+        # Primary: user's subject/action description
+        subject = request_data.get("subject_action", "").strip()
+        if subject:
+            # Split into meaningful words, filter out very short ones
+            words = [w for w in subject.split() if len(w) > 2]
+            terms.extend(words[:5])  # Cap at 5 words from subject
+
+        # Secondary: artistic styles
+        styles = request_data.get("artistic_styles", [])
+        if styles:
+            terms.extend(styles[:3])
+
+        # Tertiary: other relevant fields
+        for field in ("prompt", "lighting", "mood", "environment_setting", "shot_type"):
+            value = request_data.get(field, "")
+            if value and isinstance(value, str) and value.strip():
+                words = [w for w in value.strip().split() if len(w) > 2]
+                terms.extend(words[:3])
+
+        # Prompt type context
+        prompt_type = request_data.get("prompt_type", "")
+        if prompt_type:
+            terms.append(prompt_type)
+
+        # Deduplicate while preserving order
+        seen = set()
+        unique_terms = []
+        for term in terms:
+            lower = term.lower()
+            if lower not in seen:
+                seen.add(lower)
+                unique_terms.append(term)
+
+        return unique_terms[:10]  # Cap at 10 terms for a focused query
+
     async def _enhance_with_rag_async(self, request_data: Dict[str, Any], user_token: str = None) -> str:
         """Async version of RAG enhancement using Vertex Search with proper auth context"""
         if not settings.enable_rag:
             return ""
-        
+
         try:
-            # Simple broad search terms that will match our knowledge base
-            search_terms = ["video", "generation", "prompt", "technique", "style"]
+            # Dynamically extract search terms from the actual user request
+            search_terms = self._extract_search_terms(request_data)
+
+            if not search_terms:
+                logger.debug("No search terms extracted from request, skipping RAG")
+                return ""
+
             search_query = " ".join(search_terms)
-            
-            # If Georgian text, translate key terms to English for better search results
+
+            # If Georgian text detected, translate key terms to English for better search
             if any(ord(c) >= 0x10D0 and ord(c) <= 0x10FF for c in search_query):
-                # Simple Georgian to English mapping for common video/photo terms
                 georgian_to_english = {
-                    "ვიდეო": "video", "ფოტო": "photo", "პრომპტ": "prompt", 
+                    "ვიდეო": "video", "ფოტო": "photo", "პრომპტ": "prompt",
                     "აპლიკაცია": "application", "ლოგო": "logo", "გენერაცია": "generation",
-                    "ტექნიკა": "technique", "სტილი": "style", "ეფექტი": "effect"
+                    "ტექნიკა": "technique", "სტილი": "style", "ეფექტი": "effect",
+                    "ანიმაცია": "animation", "პორტრეტი": "portrait", "პეიზაჟი": "landscape"
                 }
                 english_terms = []
                 for term in search_terms:
                     english_term = georgian_to_english.get(term, term)
                     english_terms.append(english_term)
                 search_query = " ".join(english_terms)
-            
+
             logger.info(f"🔍 RAG async search query: {search_query}")
             
             # Use Discovery Engine with service account credentials
@@ -495,12 +532,13 @@ Respond with a structured JSON containing:
                 else:
                     logger.info(f"🔍 Direct Vertex Search error or no results: {search_result.get('message', 'No results')}")
             else:
-                logger.warning("🔍 Vertex Search service not available for RAG")
-            
+                logger.warning("⚠️ Vertex credentials missing or service unavailable, skipping RAG enhancement. "
+                             "Generation will continue without knowledge base context.")
+
             return ""
-            
+
         except Exception as e:
-            logger.error(f"Error in Vertex Search RAG: {e}")
+            logger.error(f"Error in Vertex Search RAG: {e}. Continuing generation without RAG.")
             return ""
     
     async def generate_response(self, request_data: Dict[str, Any], user_token: str = None) -> Dict[str, Any]:
