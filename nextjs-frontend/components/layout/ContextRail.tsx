@@ -4,6 +4,7 @@ import { useState } from "react";
 import { PanelRightClose, PanelRightOpen } from "lucide-react";
 import { usePersonalityStore } from "@/store/personalityStore";
 import { cn } from "@/lib/utils";
+import CharacterLockWidget from "@/components/character/CharacterLockWidget";
 
 export default function ContextRail() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -63,9 +64,7 @@ export default function ContextRail() {
             <h3 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-2">
               Locked Character
             </h3>
-            <p className="text-sm text-muted-foreground">
-              No character locked
-            </p>
+            <CharacterLockWidget />
           </section>
 
           <section>

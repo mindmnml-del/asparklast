@@ -11,7 +11,9 @@ import {
   getPromptById,
   toggleFavorite,
   deletePrompt,
+  exportPrompts,
   type GetPromptsParams,
+  type ExportFormat,
 } from "@/lib/api/history";
 import type { ApiError } from "@/lib/api/client";
 import type { GeneratedPromptHistory } from "@/lib/types/api";
@@ -109,6 +111,34 @@ export function useCopyPrompt() {
     },
     onError: () => {
       toast.error("Failed to copy prompt");
+    },
+  });
+}
+
+/** Export prompts as a downloadable file. */
+export function useExportPrompts() {
+  return useMutation<
+    Blob,
+    ApiError,
+    { format: ExportFormat; favoritesOnly: boolean }
+  >({
+    mutationFn: ({ format, favoritesOnly }) =>
+      exportPrompts(format, favoritesOnly),
+    onSuccess: (blob, { format }) => {
+      const date = new Date().toISOString().slice(0, 10);
+      const filename = `aispark_prompts_${date}.${format}`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported as ${format.toUpperCase()}`);
+    },
+    onError: (error) => {
+      toast.error(error.detail || "Export failed");
     },
   });
 }

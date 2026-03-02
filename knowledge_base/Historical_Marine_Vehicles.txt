@@ -1,0 +1,237 @@
+
+***
+### Generic Ship Types
+* Barge
+* Barque
+* Barquentine
+* Battleship
+* Bawley
+* Bilander
+* Brig
+* Brigantine
+* Caravelle
+* Carrack
+* Carrier
+* Cat
+* Corvette
+* Cruiser
+* Cutter
+* Destroyer
+* Dhow
+* Dreadnought
+* Felucca
+* Fifie
+* Freedom
+* Frigate
+* Galley
+* Galleon
+* Gunter
+* Jaegt
+* Junk
+* Ketch
+* Lugger
+* Man-O-War
+* Pink
+* Polacre
+* Proa
+* Sampan
+* Schooner
+* Schuyt
+* Sloop
+* Smack
+* Snow
+* Tartan
+* Trawler
+* Wherry
+* Xebec
+* Yawl
+* Zulu
+
+***
+### Historic Ships & Museum Vessels
+* Albion (wherry)
+* Alfred
+* Alligator
+* Bertha (drag boat)
+* Bismarck
+* Bonhomme Richard
+* Brunel's SS Great Britain
+* Buque Museo Corbeta ARA Uruguay
+* Clipper Ship City of Adelaide
+* CSS Alabama
+* CSS Florida
+* CSS Virginia (Merrimack)
+* Cutty Sark
+* Dover Bronze Age Boat
+* Excelsior (smack)
+* Fire-float Pyronaut
+* Fregatten Jylland
+* Gjøa
+* Glenlee
+* Harriet (fishing smack)
+* Hathor (wherry)
+* HM Coastal Motor Boat 4
+* HMAS Advance (P 83)
+* HMAS Castlemaine
+* HMAS Gladstone (FCPB 216)
+* HMAS Whyalla
+* HMLCT 7074
+* HMS Belfast
+* HMS Bronington (M1115)
+* HMS Caroline (1914)
+* HMS Cavalier (R73)
+* HMS Gannet (1878)
+* HMS M.33
+* HMS Medusa (A353)
+* HMS President (1918)
+* HMS Trincomalee
+* HMS Unicorn
+* HMS Victory
+* HMS Warrior (1860)
+* HMS Wellington (U65)
+* HMY Britannia
+* HNLMS Buffel
+* John King (tugboat)
+* Kathleen and May
+* Khufu ship
+* La Santa María (La Gallega)
+* Light Vessel 16
+* Lydia Eva (steam drifter)
+* Mary Rose
+* Massey Shaw
+* Maud (wherry)
+* Mayflower
+* Mayflower (tugboat)
+* Meiji-Maru
+* MTB 102
+* MV Balmoral (1949)
+* MV Countess of Breadalbane
+* MV Edmund Gardner
+* MV Lady Denman
+* MV Nelcebee
+* MY Lady of the Lake
+* MY Raven
+* Newport Medieval Ship
+* North Carr Lightship
+* Peacock (narrowboat)
+* Peggy of Castletown
+* Polly Woodside
+* President (narrowboat)
+* Prince Frederick's Barge
+* PS John H Amos
+* PS Kingswear Castle
+* PS Medway Queen
+* PS Ryde
+* PS Waverley
+* PS Wingfield Castle
+* Queen Mary's Shallop
+* Reaper (sailing vessel)
+* Result (schooner)
+* RMS Titanic
+* RML 497 (motor launch)
+* RNLB Alfred Corry (ON 353)
+* RNLB H F Bailey (ON 777)
+* RNLB Jesse Lumb (ON 822)
+* RRS Discovery
+* Saginaw
+* Santa María
+* SB Cambria
+* SB Centaur
+* SB Lady Daphne
+* SB Mirosa
+* SB Phoenician
+* SB Reminder
+* Sigyn
+* Spurn Lightship
+* SS Great Britain
+* SS Nomadic (1911)
+* SS Raven (1871)
+* SS Robin
+* SS Salama
+* SS Shieldhall
+* SS Sir Walter Scott
+* ST Cervia
+* Steam Pinnace 199
+* Sundowner (yacht)
+* SY Tern
+* Thalatta (Thames barge)
+* The icebreaker Krasin
+* The Royal Yacht Britannia
+* TS Queen Mary
+* TSS T/T Calshot
+* Turbinia
+* USS Ainsworth (DE-539)
+* USS Arizona (BB-39)
+* USS Belleau Wood (CVL-24)
+* USS Cole (DDG-67)
+* USS Conestoga (S.P. 1128)
+* USS Constitution (Old Ironsides)
+* USS Cumberland
+* USS Enterprise (CV-6)
+* USS Enterprise (CVN-65)
+* USS Essex (CV-9)
+* USS Fletcher (DD-445)
+* USS Forrestal (CVA-59)
+* USS Franklin (CV-13)
+* USS Frigate Chesapeake
+* USS Frigate Congress
+* USS Frigate Constellation
+* USS Frigate President
+* USS Frigate United States
+* USS Harmon (DE-678)
+* USS Hornet (CV-8)
+* USS Houston (CA-30)
+* USS Indianapolis (CA-35)
+* USS Intrepid (CV-11)
+* USS Jacob Jones (DD-61)
+* USS John F. Kennedy (CVA-67)
+* USS Johnston (DD-557)
+* USS Langley (CV-1)
+* USS Lexington (CV-2)
+* USS Maddox (DD-731)
+* USS Maine
+* USS Memphis (Armored Cruiser No. 10)
+* USS Midway (CVB-41)
+* USS Missouri (BB-63)
+* USS Monitor
+* USS O'Bannon (DD-450)
+* USS Pueblo (AGER-2)
+* USS Ranger (CV-4)
+* USS Samuel B. Roberts (FFG-58)
+* USS San Diego (Armored Cruiser No. 6)
+* USS San Diego (CL-53)
+* USS San Francisco (CA-38)
+* USS Saratoga (CV-3)
+* USS Somers
+* USS Tecumseh (monitor)
+* USS Texas
+* USS Tripoli (LPH-10)
+* USS Tulip
+* USS Turner Joy (DD-951)
+* USS Wasp (CV-7)
+* USS Washington (BB-56)
+* USS Yorktown (CV-5)
+* Wasp
+* Zetland Lifeboat Museum and Redcar Heritage Centre
+
+***
+### Submarines
+* Barb (SS-220)
+* C.S.S. Hunley
+* Finback (SS-230)
+* George Washington (SSBN-598)
+* Growler (SS-215)
+* H. L. Hunley
+* HMS Alliance (P417)
+* HMS Holland 1
+* Nautilus (SSN-571)
+* Rasher (SS-269)
+* Scorpion (SSN-589)
+* Sculpin (SS-191)
+* Silversides (SS-236)
+* Swordfish (SS-193)
+* Tang (SS-306)
+* Tautog (SS-199)
+* Thresher (SSN-593)
+* Triton (SSR(N)-586)
+* Wahoo (SS-238)

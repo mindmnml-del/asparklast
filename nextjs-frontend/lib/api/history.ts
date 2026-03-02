@@ -45,3 +45,17 @@ export async function deletePrompt(
   );
   return data;
 }
+
+export type ExportFormat = "json" | "csv" | "txt";
+
+/** GET /prompts/export/{format} — download prompts as a file. */
+export async function exportPrompts(
+  format: ExportFormat,
+  favoritesOnly: boolean = false
+): Promise<Blob> {
+  const { data } = await apiClient.get(`/prompts/export/${format}`, {
+    params: { favorites_only: favoritesOnly },
+    responseType: "blob",
+  });
+  return data;
+}

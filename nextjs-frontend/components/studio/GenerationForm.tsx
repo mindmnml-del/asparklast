@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Copy, RotateCcw, AlertTriangle, Hexagon } from "lucide-react";
+import { useCharacterStore } from "@/store/characterStore";
 import type { GenerationRequest } from "@/lib/types/api";
 
 const PROMPT_TYPES = ["image", "video", "universal"] as const;
@@ -21,18 +22,26 @@ export default function GenerationForm() {
 
   const { mutate, data, reset } = useGeneration();
   const { isGenerating, error, isCreditsError } = useGenerationStore();
+  const getCharacterPromptContext = useCharacterStore(
+    (s) => s.getCharacterPromptContext
+  );
 
   const handleSubmit = useCallback(() => {
     if (!promptText.trim() || isGenerating) return;
 
+    const charContext = getCharacterPromptContext();
+    const finalPrompt = charContext
+      ? `[Character: ${charContext}]\n\n${promptText.trim()}`
+      : promptText.trim();
+
     const request: GenerationRequest = {
-      prompt: promptText.trim(),
+      prompt: finalPrompt,
       type: selectedType,
       rag_enabled: ragEnabled,
     };
 
     mutate(request);
-  }, [promptText, selectedType, ragEnabled, isGenerating, mutate]);
+  }, [promptText, selectedType, ragEnabled, isGenerating, mutate, getCharacterPromptContext]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {

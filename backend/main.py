@@ -715,7 +715,7 @@ async def auto_generate_with_helios(
         )
         
         # Generate with enhanced prompt
-        result = await ai_service.generate_prompt(enhanced_request)
+        result = await ai_service.generate_response(enhanced_request.model_dump())
         
         # Add Helios metadata
         if result.get("_metadata"):

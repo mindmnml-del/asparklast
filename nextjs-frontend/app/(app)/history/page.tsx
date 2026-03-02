@@ -21,7 +21,9 @@ import {
   useToggleFavorite,
   useDeletePrompt,
   useCopyPrompt,
+  useExportPrompts,
 } from "@/lib/hooks/useHistory";
+import type { ExportFormat } from "@/lib/api/history";
 import { cn } from "@/lib/utils";
 
 type FilterTab = "all" | "favorites";
@@ -40,6 +42,7 @@ export default function HistoryPage() {
   const toggleFavorite = useToggleFavorite();
   const deletePrompt = useDeletePrompt();
   const copyPrompt = useCopyPrompt();
+  const exportMutation = useExportPrompts();
 
   // Client-side search filter
   const filtered = useMemo(() => {
@@ -76,6 +79,13 @@ export default function HistoryPage() {
         onSearchChange={setSearch}
         activeFilter={activeFilter}
         onFilterChange={setActiveFilter}
+        onExport={(format: ExportFormat) =>
+          exportMutation.mutate({
+            format,
+            favoritesOnly: activeFilter === "favorites",
+          })
+        }
+        isExporting={exportMutation.isPending}
       />
 
       {/* Content */}
