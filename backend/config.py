@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     vertex_engine_id: str = Field(default="")
     vertex_serving_config: str = Field(default="default_search")
     vertex_rag_corpus_id: str = Field(default="")
+    vertex_gen_location: str = Field(default="us-central1")
     
     # Google Cloud Authentication
     google_application_credentials: str = Field(default="")
@@ -107,7 +108,18 @@ def get_master_prompt_path() -> Path:
     return get_knowledge_base_path() / settings.master_prompt_file
 
 def validate_api_key() -> bool:
-    """Validate that Google API key is set"""
+    """Validate that Google API key or Vertex AI credentials are available"""
+    # Check for Vertex AI service account (preferred)
+    project = settings.vertex_project_id or settings.google_cloud_project
+    if project:
+        for candidate in [
+            settings.google_application_credentials,
+            "vertex-key.json",
+            "streamlit-vertex-key.json",
+        ]:
+            if candidate and Path(candidate).exists():
+                return True
+    # Fallback: legacy API key
     return bool(settings.google_api_key and settings.google_api_key != "your_google_api_key_here")
 
 def get_safety_settings() -> List[dict]:

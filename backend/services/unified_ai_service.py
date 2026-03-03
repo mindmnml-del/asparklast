@@ -14,8 +14,12 @@ import hashlib
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union
 from datetime import datetime, timedelta
-import google.generativeai as genai
-from google.generativeai.types import HarmCategory, HarmBlockThreshold
+from google.genai import types as genai_types
+from services.genai_client import (
+    get_genai_async_client,
+    build_safety_settings,
+    validate_vertex_config,
+)
 
 from config import settings, get_master_prompt_path, validate_api_key
 
@@ -45,7 +49,8 @@ class UnifiedAIService:
         self._initialized = True
         
         # Core state
-        self.model = None
+        self.async_client = None
+        self.generation_config = None
         self.is_configured = False
         self.last_error = None
         self.master_prompt = ""
@@ -79,51 +84,39 @@ class UnifiedAIService:
                 logger.warning(f"Auto-initialization failed: {e}")
     
     def _initialize(self) -> bool:
-        """Initialize the AI service with Google API"""
+        """Initialize the AI service with Vertex AI via google-genai"""
         try:
             if not validate_api_key():
-                self.last_error = "Google API key not configured"
+                self.last_error = "No valid credentials configured"
                 return False
-            
-            # Configure Google AI
-            genai.configure(api_key=settings.google_api_key)
-            
-            # Create model with optimized settings
-            generation_config = {
-                "temperature": settings.ai_temperature,
-                "top_p": 0.95,
-                "top_k": 64,
-                "max_output_tokens": settings.ai_max_tokens,
-            }
-            
-            safety_settings = [
-                {"category": HarmCategory.HARM_CATEGORY_HARASSMENT, "threshold": HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE},
-                {"category": HarmCategory.HARM_CATEGORY_HATE_SPEECH, "threshold": HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE},
-                {"category": HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, "threshold": HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE},
-                {"category": HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, "threshold": HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE},
-            ]
-            
-            self.model = genai.GenerativeModel(
-                model_name=settings.ai_model_name,
-                generation_config=generation_config,
-                safety_settings=safety_settings
+
+            # Get shared async client (Vertex AI)
+            self.async_client = get_genai_async_client()
+
+            # Build generation config (used per-call)
+            self.generation_config = genai_types.GenerateContentConfig(
+                temperature=settings.ai_temperature,
+                top_p=0.95,
+                top_k=64,
+                max_output_tokens=settings.ai_max_tokens,
+                safety_settings=build_safety_settings(),
             )
-            
+
             # Load master prompt
             self._load_master_prompt()
-            
+
             # Initialize RAG if enabled
             if settings.enable_rag:
                 self._initialize_rag()
-            
+
             self.is_configured = True
             self.last_error = None
-            logger.info("✅ Unified AI Service initialized successfully")
+            logger.info("Unified AI Service initialized successfully (Vertex AI)")
             return True
-            
+
         except Exception as e:
             self.last_error = str(e)
-            logger.error(f"❌ AI Service initialization failed: {e}")
+            logger.error(f"AI Service initialization failed: {e}")
             return False
     
     def _load_master_prompt(self) -> None:
@@ -234,8 +227,9 @@ Respond with a structured JSON containing:
             return None
         
         # Create hash from relevant request data
+        user_text = request_data.get("prompt", "") or request_data.get("subject_action", "")
         cache_data = {
-            "subject_action": request_data.get("subject_action", ""),
+            "subject_action": user_text,
             "artistic_styles": sorted(request_data.get("artistic_styles", [])),
             "target_model": request_data.get("target_model", ""),
             "prompt_type": request_data.get("prompt_type", ""),
@@ -406,8 +400,8 @@ Respond with a structured JSON containing:
         
         # Original local RAG logic as fallback
         styles = request_data.get("artistic_styles", [])
-        subject = request_data.get("subject_action", "")
-        
+        subject = request_data.get("prompt", "") or request_data.get("subject_action", "")
+
         relevant_knowledge = []
         
         for filename, content in self.knowledge_base.items():
@@ -427,8 +421,8 @@ Respond with a structured JSON containing:
         """Extract dynamic search terms from the user's request data for RAG queries"""
         terms = []
 
-        # Primary: user's subject/action description
-        subject = request_data.get("subject_action", "").strip()
+        # Primary: user's subject/action description (supports both schema keys)
+        subject = (request_data.get("prompt", "") or request_data.get("subject_action", "")).strip()
         if subject:
             # Split into meaningful words, filter out very short ones
             words = [w for w in subject.split() if len(w) > 2]
@@ -440,7 +434,7 @@ Respond with a structured JSON containing:
             terms.extend(styles[:3])
 
         # Tertiary: other relevant fields
-        for field in ("prompt", "lighting", "mood", "environment_setting", "shot_type"):
+        for field in ("lighting", "mood", "environment_setting", "shot_type"):
             value = request_data.get(field, "")
             if value and isinstance(value, str) and value.strip():
                 words = [w for w in value.strip().split() if len(w) > 2]
@@ -573,10 +567,11 @@ Respond with a structured JSON containing:
             
             full_prompt = f"{self.master_prompt}\n\n{base_prompt}{rag_context}"
             
-            # Generate response
-            response = await asyncio.to_thread(
-                self.model.generate_content,
-                full_prompt
+            # Generate response (native async via Vertex AI)
+            response = await self.async_client.models.generate_content(
+                model=settings.ai_model_name,
+                contents=full_prompt,
+                config=self.generation_config,
             )
             
             # Process response
@@ -619,7 +614,8 @@ Respond with a structured JSON containing:
         prompt_parts = []
         
         # Core request
-        prompt_parts.append(f"Create a {request_data.get('prompt_type', 'image')} prompt for: {request_data.get('subject_action', '')}")
+        user_text = request_data.get('prompt', '') or request_data.get('subject_action', '')
+        prompt_parts.append(f"Create a {request_data.get('prompt_type', 'image')} prompt for: {user_text}")
         
         # Target model
         if target_model := request_data.get('target_model'):
@@ -692,7 +688,7 @@ Respond with a structured JSON containing:
                     response_text = "Error: Unable to parse AI response - please try again"
         
         # Validate we got actual text content
-        if not response_text or response_text.startswith("<google.generativeai"):
+        if not response_text or response_text.startswith("<google"):
             response_text = "Error: AI response parsing failed - please regenerate"
         
         logger.info(f"Final parsed text length: {len(response_text)} characters")
@@ -710,9 +706,10 @@ Respond with a structured JSON containing:
                     pass
             
             # Fallback: structure the response manually
+            user_text = request_data.get("prompt", "") or request_data.get("subject_action", "")
             return {
                 "structuredPrompt": {
-                    "subject": request_data.get("subject_action", ""),
+                    "subject": user_text,
                     "setting": request_data.get("environment_setting", ""),
                     "lighting": request_data.get("lighting", ""),
                     "composition": request_data.get("shot_type", ""),

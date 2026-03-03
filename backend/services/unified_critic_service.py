@@ -8,9 +8,10 @@ import logging
 import time
 from typing import Dict, Any, Optional, List
 from enum import Enum
-import google.generativeai as genai
+from google.genai import types as genai_types
+from services.genai_client import get_genai_client, validate_vertex_config
 
-from config import settings, validate_api_key
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -27,43 +28,41 @@ class UnifiedCriticService:
     """
     
     def __init__(self):
-        self.model = None
+        self.client = None
+        self.critic_config = None
         self.is_configured = False
         self.cache = {}
         self.analysis_count = 0
         self.total_score = 0
-        
+
         # Auto-initialize if possible
-        if validate_api_key():
+        if validate_vertex_config():
             try:
                 self._initialize()
             except Exception as e:
                 logger.warning(f"Critic service auto-init failed: {e}")
-    
+
     def _initialize(self) -> bool:
-        """Initialize the critic service"""
+        """Initialize the critic service with Vertex AI"""
         try:
-            if not validate_api_key():
+            if not validate_vertex_config():
                 return False
-            
-            genai.configure(api_key=settings.google_api_key)
-            
-            # Use faster model for criticism
-            self.model = genai.GenerativeModel(
-                model_name="gemini-1.5-flash",
-                generation_config={
-                    "temperature": 0.3,
-                    "top_p": 0.9,
-                    "max_output_tokens": 1024,
-                }
+
+            self.client = get_genai_client()
+
+            # Critic uses a faster model with lower temperature
+            self.critic_config = genai_types.GenerateContentConfig(
+                temperature=0.3,
+                top_p=0.9,
+                max_output_tokens=1024,
             )
-            
+
             self.is_configured = True
-            logger.info("✅ Unified Critic Service initialized")
+            logger.info("Unified Critic Service initialized (Vertex AI)")
             return True
-            
+
         except Exception as e:
-            logger.error(f"❌ Critic service initialization failed: {e}")
+            logger.error(f"Critic service initialization failed: {e}")
             return False
     
     def analyze_prompt(
@@ -86,7 +85,11 @@ class UnifiedCriticService:
                     return cached["data"]
             
             analysis_prompt = self._build_analysis_prompt(prompt, negative_prompt, analysis_type)
-            response = self.model.generate_content(analysis_prompt)
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=analysis_prompt,
+                config=self.critic_config,
+            )
             result = self._parse_analysis_response(response.text, analysis_type)
             
             self.cache[cache_key] = {"data": result, "timestamp": time.time()}
