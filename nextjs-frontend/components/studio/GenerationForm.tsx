@@ -7,8 +7,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Copy, RotateCcw, AlertTriangle, Hexagon } from "lucide-react";
+import { Copy, RotateCcw, AlertTriangle, Hexagon, MessageSquareWarning } from "lucide-react";
 import { useCharacterStore } from "@/store/characterStore";
+import { useCritic } from "@/lib/hooks/useCritic";
+import CriticPanel from "@/components/critic/CriticPanel";
 import type { GenerationRequest } from "@/lib/types/api";
 
 const PROMPT_TYPES = ["image", "video", "universal"] as const;
@@ -25,6 +27,7 @@ export default function GenerationForm() {
   const getCharacterPromptContext = useCharacterStore(
     (s) => s.getCharacterPromptContext
   );
+  const criticMutation = useCritic();
 
   const handleSubmit = useCallback(() => {
     if (!promptText.trim() || isGenerating) return;
@@ -62,9 +65,39 @@ export default function GenerationForm() {
 
   const handleNewGeneration = useCallback(() => {
     reset();
+    criticMutation.reset();
     setPromptText("");
     setCopied(false);
-  }, [reset]);
+  }, [reset, criticMutation]);
+
+  const handleCritique = useCallback(() => {
+    if (!data?.paragraphPrompt) return;
+
+    const analysisTypeMap = {
+      image: "photo",
+      video: "video",
+      universal: "both",
+    } as const;
+
+    criticMutation.mutate({
+      prompt: data.paragraphPrompt,
+      negative_prompt: data.negativePrompt || undefined,
+      analysis_type: analysisTypeMap[selectedType],
+    });
+  }, [data, selectedType, criticMutation]);
+
+  const handleApplyImproved = useCallback(
+    (improvedPrompt: string) => {
+      setPromptText(improvedPrompt);
+      criticMutation.reset();
+      reset();
+    },
+    [criticMutation, reset]
+  );
+
+  const handleDismissCritic = useCallback(() => {
+    criticMutation.reset();
+  }, [criticMutation]);
 
   return (
     <div className="space-y-4">
@@ -185,6 +218,16 @@ export default function GenerationForm() {
                 <Button
                   variant="ghost"
                   size="sm"
+                  onClick={handleCritique}
+                  disabled={criticMutation.isPending}
+                  className="text-muted-foreground hover:text-[var(--personality-primary)]"
+                >
+                  <MessageSquareWarning className="h-4 w-4 mr-1" />
+                  {criticMutation.isPending ? "Analyzing..." : "Get Critique"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={handleNewGeneration}
                   className="text-muted-foreground hover:text-foreground"
                 >
@@ -228,6 +271,17 @@ export default function GenerationForm() {
                 {data.negativePrompt}
               </p>
             </div>
+          )}
+
+          {/* Critic Panel */}
+          {(criticMutation.data || criticMutation.isPending || criticMutation.error) && (
+            <CriticPanel
+              analysis={criticMutation.data}
+              isPending={criticMutation.isPending}
+              error={criticMutation.error}
+              onApplyImproved={handleApplyImproved}
+              onDismiss={handleDismissCritic}
+            />
           )}
         </div>
       )}
