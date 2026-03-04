@@ -17,11 +17,13 @@ from datetime import datetime, timedelta
 from google.genai import types as genai_types
 from services.genai_client import (
     get_genai_async_client,
+    get_genai_client,
     build_safety_settings,
     validate_vertex_config,
 )
 
 from config import settings, get_master_prompt_path, validate_api_key
+from core.helios_personalities import helios_system, PersonalityType
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -324,7 +326,8 @@ Respond with a structured JSON containing:
         
         return len(intersection) / len(union) if union else 0.0
     
-    def _enhance_with_rag(self, request_data: Dict[str, Any]) -> str:
+    def _enhance_with_rag(self, request_data: Dict[str, Any],
+                          helios_keywords: Optional[List[str]] = None) -> str:
         """Enhance prompt with RAG knowledge using Vertex Search"""
         if not settings.enable_rag:
             return ""
@@ -334,7 +337,7 @@ Respond with a structured JSON containing:
             from services.vertex_search_service import vertex_search_service
 
             # Dynamically extract search terms from the user's request
-            search_terms = self._extract_search_terms(request_data)
+            search_terms = self._extract_search_terms(request_data, helios_keywords=helios_keywords)
 
             if not search_terms:
                 return ""
@@ -416,8 +419,42 @@ Respond with a structured JSON containing:
             return f"\n\nRelevant knowledge context:\n{rag_context}"
         
         return ""
-    
-    def _extract_search_terms(self, request_data: Dict[str, Any]) -> List[str]:
+
+    def _select_helios_personality(self, request_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Analyze request and select Helios personality for RAG enrichment.
+        Returns a dict with personality info, or None if analysis fails."""
+        try:
+            user_prompt = (
+                request_data.get("prompt", "") or request_data.get("subject_action", "")
+            ).strip()
+            if not user_prompt:
+                return None
+
+            context = {}
+            for field in ("artistic_styles", "mood", "lighting", "shot_type",
+                          "environment_setting", "prompt_type", "target_model"):
+                value = request_data.get(field)
+                if value:
+                    context[field] = value
+
+            analysis = helios_system.analyze_request(user_prompt, context)
+            primary, secondary, reasoning = helios_system.select_personality(analysis)
+            signature_elements = helios_system.get_personality_signature_elements(primary)
+
+            result = {
+                "primary_name": primary.value,
+                "secondary_names": [p.value for p in secondary],
+                "reasoning": reasoning,
+                "signature_elements": signature_elements,
+            }
+            logger.info(f"Helios personality selected: {primary.value} (reasoning: {reasoning})")
+            return result
+        except Exception as e:
+            logger.warning(f"Helios personality selection failed: {e}. Continuing without personality enrichment.")
+            return None
+
+    def _extract_search_terms(self, request_data: Dict[str, Any],
+                              helios_keywords: Optional[List[str]] = None) -> List[str]:
         """Extract dynamic search terms from the user's request data for RAG queries"""
         terms = []
 
@@ -445,6 +482,10 @@ Respond with a structured JSON containing:
         if prompt_type:
             terms.append(prompt_type)
 
+        # Helios personality signature keywords (enrichment from personality system)
+        if helios_keywords:
+            terms.extend(helios_keywords[:3])
+
         # Deduplicate while preserving order
         seen = set()
         unique_terms = []
@@ -456,14 +497,15 @@ Respond with a structured JSON containing:
 
         return unique_terms[:10]  # Cap at 10 terms for a focused query
 
-    async def _enhance_with_rag_async(self, request_data: Dict[str, Any], user_token: str = None) -> str:
+    async def _enhance_with_rag_async(self, request_data: Dict[str, Any], user_token: str = None,
+                                      helios_keywords: Optional[List[str]] = None) -> str:
         """Async version of RAG enhancement using Vertex Search with proper auth context"""
         if not settings.enable_rag:
             return ""
 
         try:
             # Dynamically extract search terms from the actual user request
-            search_terms = self._extract_search_terms(request_data)
+            search_terms = self._extract_search_terms(request_data, helios_keywords=helios_keywords)
 
             if not search_terms:
                 logger.debug("No search terms extracted from request, skipping RAG")
@@ -560,10 +602,17 @@ Respond with a structured JSON containing:
             
             # Build enhanced prompt
             base_prompt = self._build_prompt(request_data)
-            logger.info("🔍 About to call RAG async function...")
-            # Use Vertex Search RAG with user authentication token
-            rag_context = await self._enhance_with_rag_async(request_data, user_token)
-            logger.info(f"🔍 RAG function returned {len(rag_context)} characters")
+
+            # Helios personality analysis for RAG enrichment
+            helios_info = self._select_helios_personality(request_data)
+            helios_keywords = helios_info.get("signature_elements") if helios_info else None
+
+            logger.info("About to call RAG async function...")
+            # Use Vertex Search RAG with user authentication token + Helios keywords
+            rag_context = await self._enhance_with_rag_async(
+                request_data, user_token, helios_keywords=helios_keywords
+            )
+            logger.info(f"RAG function returned {len(rag_context)} characters")
             
             full_prompt = f"{self.master_prompt}\n\n{base_prompt}{rag_context}"
             
@@ -590,7 +639,15 @@ Respond with a structured JSON containing:
                 "model_used": settings.ai_model_name,
                 "request_id": f"req_{int(time.time())}{random.randint(100, 999)}"
             }
-            
+
+            # Add Helios personality metadata if available
+            if helios_info:
+                result["_metadata"]["helios"] = {
+                    "primary_personality": helios_info["primary_name"],
+                    "secondary_personalities": helios_info["secondary_names"],
+                    "selection_reasoning": helios_info["reasoning"],
+                }
+
             # Update stats
             self.request_count += 1
             self.total_response_time += result["_metadata"]["response_time"]
@@ -756,11 +813,94 @@ Respond with a structured JSON containing:
         cache_size = len(self.cache)
         self.cache.clear()
         self.cache_stats = {"hits": 0, "misses": 0, "size": 0}
-        
+
         return {
             "message": f"Cache cleared. Removed {cache_size} entries.",
             "cache_stats": self.cache_stats.copy()
         }
+
+    def extract_character_traits(self, prompt: str) -> Dict[str, Any]:
+        """Extract visual/character traits from a prompt using Gemini.
+
+        Returns a dict with CharacterSheet-compatible keys plus
+        'is_character' (bool) indicating if a visual subject was found.
+        """
+        extraction_config = genai_types.GenerateContentConfig(
+            temperature=0.2,
+            top_p=0.9,
+            max_output_tokens=1024,
+        )
+
+        extraction_prompt = f"""Analyze the following creative prompt and extract visual subject traits.
+
+PROMPT: "{prompt}"
+
+Determine what type of visual subject this describes:
+- "person" for humans or humanoid characters
+- "creature" for animals, monsters, aliens
+- "environment" for scenes, landscapes, architecture
+- "object" for items, vehicles, artifacts
+
+If the prompt does NOT describe any identifiable visual subject (e.g. abstract concepts, actions only), set "is_character" to false and return minimal data.
+
+Return ONLY a valid JSON object with these keys:
+{{
+  "is_character": true,
+  "entity_type": "person",
+  "name": "descriptive name for this subject",
+  "description": "brief description",
+  "gender": "male|female|non-binary|unspecified",
+  "age_range": "child (5-12)|teenager (13-19)|young adult (20-35)|middle-aged (36-55)|senior (55+)",
+  "ethnicity": "",
+  "skin_tone": "",
+  "eye_color": "",
+  "hair_color": "",
+  "hair_style": "",
+  "height": "",
+  "build": "slim|athletic|average|muscular|curvy|heavy-set",
+  "distinctive_features": [],
+  "clothing_style": "",
+  "typical_outfit": "",
+  "accessories": [],
+  "color_palette": [],
+  "lighting": "",
+  "atmosphere": "",
+  "time_of_day": "",
+  "architecture_style": ""
+}}
+
+Rules:
+- For person/creature: fill physical traits, leave environment fields empty.
+- For environment: fill lighting/atmosphere/time_of_day/architecture_style, leave physical traits empty.
+- Only include traits explicitly mentioned or strongly implied in the prompt.
+- Leave fields as empty string "" or empty array [] if not mentioned.
+- Return ONLY the JSON, no markdown fences, no explanation."""
+
+        try:
+            client = get_genai_client()
+            response = client.models.generate_content(
+                model=settings.ai_model_name,
+                contents=extraction_prompt,
+                config=extraction_config,
+            )
+
+            text = response.text.strip()
+            # Strip markdown fences if present
+            if text.startswith("```"):
+                text = text.split("\n", 1)[1] if "\n" in text else text[3:]
+            if text.endswith("```"):
+                text = text[:-3].strip()
+            if text.startswith("json"):
+                text = text[4:].strip()
+
+            return json.loads(text)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse extraction response as JSON: {e}")
+            return {"is_character": False, "error": "Failed to parse AI response"}
+        except Exception as e:
+            logger.error(f"Character extraction failed: {e}")
+            return {"is_character": False, "error": str(e)}
 
 # Global service instance
 ai_service = UnifiedAIService()
