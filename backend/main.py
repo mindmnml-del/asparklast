@@ -62,9 +62,15 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+_cors_origins = [
+    origin.strip()
+    for origin in settings.allowed_origins.split(",")
+    if origin.strip()
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -509,6 +515,24 @@ def get_character_stats(current_user: models.User = Depends(get_current_user)):
     except Exception as e:
         logger.error(f"Character stats error: {e}")
         raise HTTPException(status_code=500, detail="Failed to get character stats")
+
+
+@app.post("/characters/extract-from-prompt")
+def extract_character_from_prompt(
+    request: schemas.CharacterExtractionRequest,
+    current_user: models.User = Depends(get_current_user)
+):
+    """Extract character/environment traits from a prompt using AI"""
+    try:
+        result = ai_service.extract_character_traits(request.prompt)
+        return {
+            "success": True,
+            "extracted": result,
+            "is_character": result.get("is_character", False),
+        }
+    except Exception as e:
+        logger.error(f"Character extraction error: {e}")
+        raise HTTPException(status_code=500, detail="Failed to extract character traits")
 
 # Helios Master Prompt System Endpoints
 

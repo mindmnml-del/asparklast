@@ -3,6 +3,7 @@ Unified Critic Service - Consolidated critic functionality
 Provides prompt quality analysis and improvement suggestions
 """
 
+import hashlib
 import json
 import logging
 import time
@@ -78,7 +79,7 @@ class UnifiedCriticService:
                 return self._error_response("Critic service not available")
         
         try:
-            cache_key = f"{hash(prompt + negative_prompt + analysis_type.value)}"
+            cache_key = hashlib.md5(f"{prompt}{negative_prompt}{analysis_type.value}".encode()).hexdigest()
             if cache_key in self.cache:
                 cached = self.cache[cache_key]
                 if time.time() - cached["timestamp"] < settings.cache_ttl:
@@ -106,16 +107,49 @@ class UnifiedCriticService:
     def _build_analysis_prompt(self, prompt: str, negative_prompt: str, analysis_type: AnalysisType) -> str:
         """Build analysis prompt based on type"""
         categories = self._get_categories(analysis_type)
-        return f"""You are an expert prompt analyzer. Analyze this {analysis_type.value} prompt:
+
+        if analysis_type == AnalysisType.VIDEO:
+            category_guide = (
+                "- TEMPORAL_COHERENCE: Logical time progression, scene continuity, consistent pacing cues\n"
+                "- MOTION_CLARITY: Explicit motion descriptions, direction, speed, subject movement\n"
+                "- NARRATIVE_FLOW: Story arc across shots, cause-and-effect, emotional progression\n"
+                "- TECHNICAL_SPECS: Frame rate, resolution, aspect ratio, codec-relevant details\n"
+                "- CINEMATIC_QUALITY: Camera movement, depth of field, color grading, filmic language"
+            )
+        else:
+            category_guide = (
+                "- CONCEPT_CONFLICT: Clear subject-vs-environment tension, visual contrast, thematic intent\n"
+                "- HIERARCHY_COMPOSITION: Foreground/mid/background layering, focal guidance, rule of thirds\n"
+                "- ATMOSPHERE_SPECIFICITY: Concrete lighting, weather, time-of-day, sensory detail\n"
+                "- TECHNICAL_PRECISION: Camera/lens specs, render settings, resolution, format accuracy\n"
+                "- NARRATIVE_DYNAMICS: Story implication, character intent, emotional subtext, viewer engagement"
+            )
+
+        return f"""You are a strict prompt-quality grader. Analyze this {analysis_type.value} prompt:
 
 PROMPT: "{prompt}"
 NEGATIVE: "{negative_prompt}"
 
-Score each category (20 points max):
+Score each category (0-20):
 {categories}
 
-Return JSON:
-{{"overall_score": 85, "category_scores": {{"cat1": 18}}, "assessment": "Brief assessment", "strengths": ["str1"], "weaknesses": ["weak1"], "top_suggestion": "Main improvement", "improved_prompt": "Enhanced version"}}"""
+GRADING RUBRIC (apply strictly per category):
+0-5 POOR: Missing or contradictory elements, no usable detail for this category.
+6-10 BASIC: Generic or vague, recognizable intent but lacks specificity or has flaws.
+11-15 GOOD: Solid professional-level detail, clear intent, minor gaps only.
+16-20 EXCEPTIONAL: Masterclass detail, precise and evocative, no meaningful improvement possible.
+
+CATEGORY GUIDE:
+{category_guide}
+
+SCORING RULES:
+- Use the full 0-20 range. Most prompts score 8-14 per category.
+- Reserve 16+ for truly exceptional detail. A score of 20 means flawless.
+- overall_score = SUM of all 5 category scores (Total 0-100 scale).
+- Be critical. Vague prompts must score below 10.
+
+Return ONLY valid JSON:
+{{"overall_score": 0, "category_scores": {{"CAT": 0}}, "assessment": "1-2 sentences", "strengths": ["str"], "weaknesses": ["weak"], "top_suggestion": "suggestion", "improved_prompt": "enhanced version"}}"""
     
     def _get_categories(self, analysis_type: AnalysisType) -> str:
         """Get scoring categories based on analysis type"""

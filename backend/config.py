@@ -15,9 +15,12 @@ class Settings(BaseSettings):
     """Application settings with validation and defaults"""
     
     # Core Settings
-    secret_key: str = Field(default="change-this-secret-key-in-production")
+    secret_key: str = Field(default="")
     debug_mode: bool = Field(default=False)
     log_level: str = Field(default="INFO")
+
+    # CORS — comma-separated allowed origins
+    allowed_origins: str = Field(default="http://localhost:3000,http://localhost:8501")
     
     # Database
     database_url: str = Field(default="sqlite:///./aispark_studio.db")
@@ -89,6 +92,18 @@ elif _BACKEND_ENV.exists():
 
 # Global settings instance (pydantic-settings v2 supports _env_file kwarg)
 settings = Settings(_env_file=str(_env_file_path)) if _env_file_path else Settings()
+
+# Enforce cryptographically secure secret key
+import secrets as _secrets
+import logging as _logging
+_config_logger = _logging.getLogger("config")
+
+if not settings.secret_key or settings.secret_key == "change-this-secret-key-in-production":
+    settings.secret_key = _secrets.token_urlsafe(32)
+    _config_logger.warning(
+        "SECRET KEY: No secret_key configured. Generated an ephemeral key. "
+        "Set AISPARK_SECRET_KEY in your .env for persistent sessions across restarts."
+    )
 
 def get_project_root() -> Path:
     """Get the project root directory"""

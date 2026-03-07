@@ -12,7 +12,10 @@ export default function Topbar() {
   const { isAuthenticated, credits, user } = useAuthStore();
   const { logout } = useAuth();
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => setMounted(true), []);
 
   // Close dropdown on outside click
   useEffect(() => {
@@ -53,7 +56,9 @@ export default function Topbar() {
       </div>
 
       <div className="flex items-center gap-4">
-        {isAuthenticated ? (
+        {!mounted ? (
+          <div className="h-8 w-24 rounded-full bg-white/[0.04] animate-pulse" />
+        ) : isAuthenticated ? (
           <>
             {/* Credits Orb */}
             <div

@@ -7,11 +7,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Copy, RotateCcw, AlertTriangle, Hexagon, MessageSquareWarning } from "lucide-react";
+import { Copy, RotateCcw, AlertTriangle, Hexagon, MessageSquareWarning, UserPlus } from "lucide-react";
 import { useCharacterStore } from "@/store/characterStore";
 import { useCritic } from "@/lib/hooks/useCritic";
+import { useExtractCharacterTraits } from "@/lib/hooks/useCharacters";
 import CriticPanel from "@/components/critic/CriticPanel";
-import type { GenerationRequest } from "@/lib/types/api";
+import ExtractionPreviewModal from "@/components/character/ExtractionPreviewModal";
+import type { GenerationRequest, CharacterSheet } from "@/lib/types/api";
 
 const PROMPT_TYPES = ["image", "video", "universal"] as const;
 type PromptType = (typeof PROMPT_TYPES)[number];
@@ -28,14 +30,19 @@ export default function GenerationForm() {
     (s) => s.getCharacterPromptContext
   );
   const criticMutation = useCritic();
+  const extractMutation = useExtractCharacterTraits();
+  const [extractionData, setExtractionData] = useState<(Partial<CharacterSheet> & { is_character: boolean }) | null>(null);
+  const [isExtractionModalOpen, setIsExtractionModalOpen] = useState(false);
+
+  const safePrompt = typeof promptText === "string" ? promptText : "";
 
   const handleSubmit = useCallback(() => {
-    if (!promptText.trim() || isGenerating) return;
+    if (!safePrompt.trim() || isGenerating) return;
 
     const charContext = getCharacterPromptContext();
     const finalPrompt = charContext
       ? `[Character: ${charContext}]\n\n${promptText.trim()}`
-      : promptText.trim();
+      : safePrompt.trim();
 
     const request: GenerationRequest = {
       prompt: finalPrompt,
@@ -44,7 +51,7 @@ export default function GenerationForm() {
     };
 
     mutate(request);
-  }, [promptText, selectedType, ragEnabled, isGenerating, mutate, getCharacterPromptContext]);
+  }, [safePrompt, selectedType, ragEnabled, isGenerating, mutate, getCharacterPromptContext]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -88,7 +95,7 @@ export default function GenerationForm() {
 
   const handleApplyImproved = useCallback(
     (improvedPrompt: string) => {
-      setPromptText(improvedPrompt);
+      setPromptText(improvedPrompt ?? "");
       criticMutation.reset();
       reset();
     },
@@ -98,6 +105,16 @@ export default function GenerationForm() {
   const handleDismissCritic = useCallback(() => {
     criticMutation.reset();
   }, [criticMutation]);
+
+  const handleExtract = useCallback(() => {
+    if (!data?.paragraphPrompt) return;
+    extractMutation.mutate(data.paragraphPrompt, {
+      onSuccess: (resp) => {
+        setExtractionData(resp.extracted);
+        setIsExtractionModalOpen(true);
+      },
+    });
+  }, [data, extractMutation]);
 
   return (
     <div className="space-y-4">
@@ -155,7 +172,7 @@ export default function GenerationForm() {
         {/* Submit button */}
         <Button
           onClick={handleSubmit}
-          disabled={!promptText.trim() || isGenerating}
+          disabled={!safePrompt.trim() || isGenerating}
           className={cn(
             "ml-auto",
             "bg-[var(--personality-primary)] text-[#0A0B0E]",
@@ -214,6 +231,16 @@ export default function GenerationForm() {
                 >
                   <Copy className="h-4 w-4 mr-1" />
                   {copied ? "Copied!" : "Copy"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleExtract}
+                  disabled={extractMutation.isPending}
+                  className="text-muted-foreground hover:text-[var(--personality-primary)]"
+                >
+                  <UserPlus className="h-4 w-4 mr-1" />
+                  {extractMutation.isPending ? "Extracting..." : "Save to Library"}
                 </Button>
                 <Button
                   variant="ghost"
@@ -284,6 +311,15 @@ export default function GenerationForm() {
             />
           )}
         </div>
+      )}
+
+      {/* Extraction Preview Modal */}
+      {extractionData && (
+        <ExtractionPreviewModal
+          open={isExtractionModalOpen}
+          onOpenChange={setIsExtractionModalOpen}
+          extractedData={extractionData}
+        />
       )}
     </div>
   );

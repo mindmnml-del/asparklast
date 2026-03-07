@@ -81,10 +81,33 @@ def get_db() -> Session:
 def create_tables():
     """Create all database tables"""
     from .models import Base
-    
+
     try:
         Base.metadata.create_all(bind=engine)
         logger.info("✅ Database tables created successfully")
+
+        # Ensure indexes exist on existing tables (create_all won't add them retroactively)
+        if DATABASE_URL.startswith("sqlite"):
+            from sqlalchemy import text
+            with engine.connect() as conn:
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_api_usage_created_at ON api_usage (created_at)"))
+                conn.execute(text("CREATE INDEX IF NOT EXISTS ix_system_metrics_metric_name ON system_metrics (metric_name)"))
+                conn.commit()
+
+        # Retroactive migration: add tenant_id to existing tables for B2B multi-tenancy
+        # SQLite < 3.37 doesn't support IF NOT EXISTS on ALTER TABLE ADD COLUMN,
+        # so we catch "duplicate column" errors per statement.
+        if DATABASE_URL.startswith("sqlite"):
+            from sqlalchemy import text
+            tenant_tables = ["users", "generated_prompts", "feedback", "api_usage", "characters"]
+            with engine.connect() as conn:
+                for table in tenant_tables:
+                    try:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN tenant_id INTEGER REFERENCES tenants(id)"))
+                        conn.commit()
+                        logger.info(f"  Migration: added tenant_id to {table}")
+                    except Exception:
+                        logger.debug(f"  Migration skipped: tenant_id already exists on {table}")
     except Exception as e:
         logger.error(f"❌ Failed to create database tables: {e}")
         raise

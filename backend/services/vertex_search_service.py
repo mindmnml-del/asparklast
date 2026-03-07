@@ -3,11 +3,17 @@ Vertex AI Search Service using Google Cloud Discovery Engine
 Enterprise search solution with proper authentication and error handling
 """
 
+import io
 import logging
 import json
 import os
 from typing import Dict, Any, List, Optional
 from pathlib import Path
+
+try:
+    import docx as python_docx
+except ImportError:
+    python_docx = None
 
 from config import settings
 
@@ -321,10 +327,21 @@ class VertexSearchService:
             bucket = storage_client.bucket(bucket_name)
             blob = bucket.blob(blob_name)
             
-            # Download content as text
-            content = blob.download_as_text(encoding='utf-8')
-            logger.info(f"Successfully fetched {len(content)} chars from {gs_uri}")
-            return content
+            # Download content — handle .docx binary files vs plain text
+            if gs_uri.lower().endswith('.docx') and python_docx is not None:
+                try:
+                    blob_bytes = blob.download_as_bytes()
+                    doc = python_docx.Document(io.BytesIO(blob_bytes))
+                    content = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+                    logger.info(f"Successfully parsed .docx ({len(content)} chars) from {gs_uri}")
+                    return content
+                except Exception as e:
+                    logger.warning(f"Failed to parse .docx {gs_uri}: {e}, falling back to text")
+                    return None
+            else:
+                content = blob.download_as_text(encoding='utf-8')
+                logger.info(f"Successfully fetched {len(content)} chars from {gs_uri}")
+                return content
             
         except Exception as e:
             logger.error(f"Failed to fetch from GCS {gs_uri}: {e}")

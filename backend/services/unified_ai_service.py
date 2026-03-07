@@ -5,6 +5,7 @@ Optimized for performance and maintainability
 """
 
 import os
+import re
 import json
 import time
 import asyncio
@@ -24,6 +25,7 @@ from services.genai_client import (
 
 from config import settings, get_master_prompt_path, validate_api_key
 from core.helios_personalities import helios_system, PersonalityType
+from services.unified_critic_service import critic_service, AnalysisType
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -236,7 +238,8 @@ Respond with a structured JSON containing:
             "target_model": request_data.get("target_model", ""),
             "prompt_type": request_data.get("prompt_type", ""),
             "lighting": request_data.get("lighting", ""),
-            "mood": request_data.get("mood", "")
+            "mood": request_data.get("mood", ""),
+            "auto_improve": request_data.get("auto_improve", False),
         }
         
         cache_string = json.dumps(cache_data, sort_keys=True)
@@ -453,6 +456,81 @@ Respond with a structured JSON containing:
             logger.warning(f"Helios personality selection failed: {e}. Continuing without personality enrichment.")
             return None
 
+    async def _spark_shield_improve(self, request_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Run Spark Shield auto-improvement on the raw prompt.
+
+        Calls the critic service to score the user's prompt. If the score is
+        below 80 and an improved prompt is provided, the improved version is
+        written back into request_data so downstream _build_prompt uses it.
+
+        Returns a metadata dict if the check ran, or None on failure.
+        """
+        try:
+            # Extract raw prompt (supports both StudioRequest and GenerationRequest)
+            prompt_text = (
+                request_data.get("prompt", "") or request_data.get("subject_action", "")
+            ).strip()
+            if not prompt_text:
+                return None
+
+            negative_text = (
+                request_data.get("negative_prompt", "") or request_data.get("negative_prompts", "")
+            ).strip()
+
+            # Map type to AnalysisType
+            type_value = (
+                request_data.get("type", "") or request_data.get("prompt_type", "")
+            ).lower()
+            analysis_type = AnalysisType.VIDEO if type_value == "video" else AnalysisType.PHOTO
+
+            # Call synchronous critic via thread to avoid blocking the event loop
+            critic_result = await asyncio.to_thread(
+                critic_service.analyze_prompt,
+                prompt_text,
+                negative_text,
+                analysis_type,
+            )
+
+            # If the critic itself returned an error, bail out gracefully
+            if critic_result.get("error"):
+                logger.warning(f"Spark Shield critic returned error: {critic_result.get('message')}")
+                return None
+
+            score = critic_result.get("overall_score", 100)
+            improved_prompt = critic_result.get("improved_prompt", "")
+
+            if score < 80 and improved_prompt and improved_prompt.strip():
+                # Mutate request_data in-place for both schema key variants
+                if "prompt" in request_data:
+                    request_data["prompt"] = improved_prompt
+                if "subject_action" in request_data:
+                    request_data["subject_action"] = improved_prompt
+
+                logger.info(
+                    f"Spark Shield improved prompt (score {score}). "
+                    f"Original length: {len(prompt_text)}, Improved length: {len(improved_prompt)}"
+                )
+                return {
+                    "enabled": True,
+                    "auto_improved": True,
+                    "original_score": score,
+                    "original_prompt": prompt_text,
+                    "improved_prompt": improved_prompt,
+                    "assessment": critic_result.get("assessment", ""),
+                    "top_suggestion": critic_result.get("top_suggestion", ""),
+                }
+            else:
+                logger.info(f"Spark Shield: score {score} >= 80, no improvement needed")
+                return {
+                    "enabled": True,
+                    "auto_improved": False,
+                    "original_score": score,
+                }
+
+        except Exception as e:
+            logger.warning(f"Spark Shield failed, continuing with original prompt: {e}")
+            return None
+
     def _extract_search_terms(self, request_data: Dict[str, Any],
                               helios_keywords: Optional[List[str]] = None) -> List[str]:
         """Extract dynamic search terms from the user's request data for RAG queries"""
@@ -527,8 +605,13 @@ Respond with a structured JSON containing:
                     english_terms.append(english_term)
                 search_query = " ".join(english_terms)
 
-            logger.info(f"🔍 RAG async search query: {search_query}")
-            
+            # Hybrid Query Injection: append broad knowledge base terms to guarantee
+            # RAG hits even for creative/cultural queries that don't directly match docs
+            hybrid_terms = "prompt engineering techniques cinematography lighting style"
+            search_query = f"{search_query} {hybrid_terms}"
+
+            logger.info(f"🔍 RAG async search query (hybrid): {search_query}")
+
             # Use Discovery Engine with service account credentials
             logger.info("🔍 Using Discovery Engine with service account...")
             from services.vertex_search_service import vertex_search_service
@@ -599,8 +682,16 @@ Respond with a structured JSON containing:
                 return cached_response
             
             start_time = time.time()
-            
-            # Build enhanced prompt
+
+            # Spark Shield auto-improvement (runs before prompt building)
+            spark_shield_meta = None
+            if request_data.get("auto_improve"):
+                try:
+                    spark_shield_meta = await self._spark_shield_improve(request_data)
+                except Exception as e:
+                    logger.warning(f"Spark Shield failed, continuing with original prompt: {e}")
+
+            # Build enhanced prompt (uses potentially improved request_data)
             base_prompt = self._build_prompt(request_data)
 
             # Helios personality analysis for RAG enrichment
@@ -647,6 +738,10 @@ Respond with a structured JSON containing:
                     "secondary_personalities": helios_info["secondary_names"],
                     "selection_reasoning": helios_info["reasoning"],
                 }
+
+            # Add Spark Shield metadata if auto-improvement was requested
+            if spark_shield_meta:
+                result["_metadata"]["spark_shield"] = spark_shield_meta
 
             # Update stats
             self.request_count += 1
@@ -702,7 +797,15 @@ Respond with a structured JSON containing:
         # Negative prompts
         if negative := request_data.get('negative_prompts'):
             prompt_parts.append(f"Avoid: {negative}")
-        
+
+        # Enforce English-only output for AI generation models
+        prompt_parts.append(
+            "CRITICAL INSTRUCTION: The final generated structuredPrompt, paragraphPrompt, "
+            "and negativePrompt MUST be written entirely in ENGLISH. If the user's input is "
+            "in another language, translate the concepts into highly detailed, professional "
+            "English AI prompt keywords."
+        )
+
         return "\n".join(prompt_parts)
     
     def _process_response(self, response, request_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -752,8 +855,7 @@ Respond with a structured JSON containing:
         print(f"DEBUG: PARSED RESPONSE TEXT: {response_text[:200]}...")
         
         try:
-            
-            # Try to parse JSON response
+            # --- Phase 1: Try direct JSON (rare but possible) ---
             if response_text.startswith('{') and response_text.endswith('}'):
                 try:
                     parsed = json.loads(response_text)
@@ -761,31 +863,83 @@ Respond with a structured JSON containing:
                         return parsed
                 except json.JSONDecodeError:
                     pass
-            
-            # Fallback: structure the response manually
+
+            # --- Phase 2: Regex extraction from Helios structured text ---
+            structured_data = {}
+            paragraph_prompt = ""
+            negative_prompt = ""
+
+            # 2a: Extract JSON block from within markdown code fences or raw braces
+            json_match = re.search(r'```(?:json)?\s*(\{[\s\S]*?\})\s*```', response_text)
+            if not json_match:
+                # Fallback: find the first standalone JSON object
+                json_match = re.search(r'(\{[\s\S]*?\})\s*(?:```|###|\n\n2\.)', response_text)
+            if json_match:
+                try:
+                    structured_data = json.loads(json_match.group(1))
+                    logger.info("Successfully extracted structured JSON via regex")
+                except json.JSONDecodeError:
+                    logger.warning("Found JSON-like block but failed to parse it")
+
+            # 2b: Extract paragraph prompt
+            para_match = re.search(
+                r'(?:#{0,3}\s*2\.\s*PARAGRAPH PROMPT[:\s]*|PARAGRAPH PROMPT[:\s]*)\n*(.*?)(?=\n*(?:#{0,3}\s*3\.\s*NEGATIVE|NEGATIVE PROMPT)|\Z)',
+                response_text, re.IGNORECASE | re.DOTALL
+            )
+            if para_match:
+                paragraph_prompt = para_match.group(1).strip().strip('"').strip()
+                logger.info(f"Extracted paragraph prompt: {len(paragraph_prompt)} chars")
+
+            # 2c: Extract negative prompt
+            neg_match = re.search(
+                r'(?:#{0,3}\s*3\.\s*NEGATIVE PROMPT[:\s]*|NEGATIVE PROMPT[:\s]*)\n*(.*)',
+                response_text, re.IGNORECASE | re.DOTALL
+            )
+            if neg_match:
+                negative_prompt = neg_match.group(1).strip().strip('"').strip()
+                # Remove trailing markdown artifacts
+                negative_prompt = re.sub(r'\s*```\s*$', '', negative_prompt).strip()
+                logger.info(f"Extracted negative prompt: {len(negative_prompt)} chars")
+
+            # 2d: Fallback for paragraph — clean raw text if regex missed
+            if not paragraph_prompt:
+                cleaned = response_text
+                # Remove known system headers
+                cleaned = re.sub(r'HELIOS SYSTEM ONLINE[.\s]*', '', cleaned)
+                cleaned = re.sub(r'ANALYSIS:.*?(?=\n\n|\n###)', '', cleaned, flags=re.DOTALL)
+                # Remove JSON blocks and markdown fences
+                cleaned = re.sub(r'```(?:json)?[\s\S]*?```', '', cleaned)
+                # Remove section headers
+                cleaned = re.sub(r'#{1,3}\s*\d+\.\s*(STRUCTURED|PARAGRAPH|NEGATIVE)\s*PROMPT[:\s]*', '', cleaned, flags=re.IGNORECASE)
+                cleaned = re.sub(r'\n{3,}', '\n\n', cleaned).strip()
+                if cleaned:
+                    paragraph_prompt = cleaned
+                    logger.warning("Used fallback cleaned text for paragraph prompt")
+
+            # --- Phase 3: Build final response ---
             user_text = request_data.get("prompt", "") or request_data.get("subject_action", "")
             return {
                 "structuredPrompt": {
-                    "subject": user_text,
-                    "setting": request_data.get("environment_setting", ""),
-                    "lighting": request_data.get("lighting", ""),
-                    "composition": request_data.get("shot_type", ""),
-                    "styleAndMedium": ", ".join(request_data.get("artistic_styles", [])),
-                    "mood": request_data.get("mood", ""),
-                    "technicalDetails": response_text
+                    "subject": structured_data.get("subject", user_text),
+                    "setting": structured_data.get("setting", request_data.get("environment_setting", "")),
+                    "lighting": structured_data.get("lighting", request_data.get("lighting", "")),
+                    "composition": structured_data.get("composition", request_data.get("shot_type", "")),
+                    "styleAndMedium": structured_data.get("styleAndMedium", ", ".join(request_data.get("artistic_styles", []))),
+                    "mood": structured_data.get("mood", request_data.get("mood", "")),
+                    "technicalDetails": structured_data.get("technicalDetails", ""),
                 },
-                "paragraphPrompt": response_text,
-                "negativePrompt": request_data.get("negative_prompts", ""),
+                "paragraphPrompt": paragraph_prompt or response_text,
+                "negativePrompt": negative_prompt or request_data.get("negative_prompts", ""),
                 "tool": request_data.get("target_model", "Universal"),
-                "type": request_data.get("prompt_type", "image")
+                "type": request_data.get("prompt_type", "image"),
             }
-            
+
         except Exception as e:
-            logger.error(f"❌ Response processing failed: {e}")
+            logger.error(f"Response processing failed: {e}")
             return {
                 "error": True,
                 "message": "Failed to process AI response",
-                "details": str(e)
+                "details": str(e),
             }
     
     def get_status(self) -> Dict[str, Any]:

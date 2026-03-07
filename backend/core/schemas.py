@@ -45,6 +45,9 @@ class StudioRequest(BaseModel):
     use_rag: bool = True
     user_language: str = 'en'
 
+    # Spark Shield
+    auto_improve: bool = Field(default=False, description="Auto-improve prompt via Spark Shield critic before generation")
+
 class GenerationRequest(BaseModel):
     """Schema for AI prompt generation request"""
     prompt: str = Field(..., min_length=3, description="User prompt for generation")
@@ -54,6 +57,9 @@ class GenerationRequest(BaseModel):
     tool: str = "Universal"
     diversity_enabled: bool = True
     rag_enabled: bool = True
+
+    # Spark Shield
+    auto_improve: bool = Field(default=False, description="Auto-improve prompt via Spark Shield critic before generation")
 
 class CriticAnalysisRequest(BaseModel):
     """Schema for critic analysis request"""
@@ -136,6 +142,8 @@ class CriticAnalysis(BaseModel):
 
 class ServiceStatus(BaseModel):
     """Service status response"""
+    model_config = ConfigDict(protected_namespaces=())
+
     configured: bool
     model_name: Optional[str] = None
     request_count: int = 0
@@ -197,3 +205,8 @@ class CacheStats(BaseModel):
     hit_rate: float
     evictions: int
     ttl_seconds: int
+
+
+class CharacterExtractionRequest(BaseModel):
+    """Request to extract character/environment traits from a prompt"""
+    prompt: str = Field(..., min_length=10)

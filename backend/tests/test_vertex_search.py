@@ -7,6 +7,7 @@ import pytest
 import asyncio
 from unittest.mock import patch, MagicMock
 from services.vertex_search_service import vertex_search_service
+from config import settings
 
 
 class TestVertexSearchFixed:
@@ -25,8 +26,8 @@ class TestVertexSearchFixed:
         assert status["service"] == "Vertex AI Search"
         assert status["enabled"] == True
         assert status["configured"] == True
-        assert status["project_id"] == "881868597890"
-        assert status["data_store_id"] == "aispark-knowledge-base_1755346996589"
+        assert status["project_id"] == settings.vertex_project_id
+        assert status["data_store_id"] == settings.vertex_data_store_id
 
     @pytest.mark.asyncio
     async def test_search_functionality_graceful(self):

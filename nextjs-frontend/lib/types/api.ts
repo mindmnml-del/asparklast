@@ -130,6 +130,8 @@ export interface CriticAnalysis {
 
 // --- Character Lock ---
 
+export type EntityType = "person" | "environment" | "object" | "creature";
+
 export type GenderType = "male" | "female" | "non-binary" | "unspecified";
 
 export type AgeRange =
@@ -183,6 +185,12 @@ export interface CharacterSheet {
   times_used: number;
   last_used: string | null;
   successful_generations: number;
+  // Multi-entity fields
+  entity_type?: EntityType;
+  lighting?: string;
+  atmosphere?: string;
+  time_of_day?: string;
+  architecture_style?: string;
 }
 
 export interface CharacterResponse {
@@ -209,6 +217,16 @@ export interface SessionCharacterResponse {
   character: CharacterSheet | null;
   message?: string;
   session_id?: string;
+}
+
+export interface CharacterExtractionRequest {
+  prompt: string;
+}
+
+export interface CharacterExtractionResponse {
+  success: boolean;
+  extracted: Partial<CharacterSheet> & { is_character: boolean };
+  is_character: boolean;
 }
 
 export interface CharacterStatsResponse {

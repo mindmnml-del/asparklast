@@ -32,6 +32,7 @@ class CacheService:
         self.connection_pool: Optional[ConnectionPool] = None
         self._initialized = False
         self._fallback_cache: Dict[str, Any] = {}  # In-memory fallback
+        self._lock = asyncio.Lock()  # Thread-safe access to _fallback_cache
         self._metrics = {
             "hits": 0,
             "misses": 0,
@@ -127,19 +128,20 @@ class CacheService:
                     self._metrics["misses"] += 1
                     return None
             else:
-                # Use fallback cache
-                if cache_key in self._fallback_cache:
-                    value, expiry = self._fallback_cache[cache_key]
-                    if expiry > datetime.now():
-                        self._metrics["fallback_hits"] += 1
-                        return value
-                    else:
-                        del self._fallback_cache[cache_key]
-                        self._metrics["evictions"] += 1
-                
-                self._metrics["misses"] += 1
-                return None
-                
+                # Use fallback cache (thread-safe)
+                async with self._lock:
+                    if cache_key in self._fallback_cache:
+                        value, expiry = self._fallback_cache[cache_key]
+                        if expiry > datetime.now():
+                            self._metrics["fallback_hits"] += 1
+                            return value
+                        else:
+                            del self._fallback_cache[cache_key]
+                            self._metrics["evictions"] += 1
+
+                    self._metrics["misses"] += 1
+                    return None
+
         except Exception as e:
             logger.error(f"Cache get error: {e}")
             self._metrics["errors"] += 1
@@ -164,16 +166,17 @@ class CacheService:
                 await self.redis_client.setex(cache_key, ttl, serialized)
                 return True
             else:
-                # Use fallback cache
-                expiry = datetime.now() + timedelta(seconds=ttl)
-                self._fallback_cache[cache_key] = (value, expiry)
-                
-                # Clean up old entries if cache is too large
-                if len(self._fallback_cache) > 1000:
-                    self._cleanup_fallback_cache()
-                
+                # Use fallback cache (thread-safe)
+                async with self._lock:
+                    expiry = datetime.now() + timedelta(seconds=ttl)
+                    self._fallback_cache[cache_key] = (value, expiry)
+
+                    # Clean up old entries if cache is too large
+                    if len(self._fallback_cache) > 1000:
+                        self._cleanup_fallback_cache()
+
                 return True
-                
+
         except Exception as e:
             logger.error(f"Cache set error: {e}")
             self._metrics["errors"] += 1
@@ -192,10 +195,11 @@ class CacheService:
             if self._initialized and self.redis_client:
                 await self.redis_client.delete(cache_key)
             else:
-                self._fallback_cache.pop(cache_key, None)
-            
+                async with self._lock:
+                    self._fallback_cache.pop(cache_key, None)
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Cache delete error: {e}")
             self._metrics["errors"] += 1
@@ -214,11 +218,12 @@ class CacheService:
             if self._initialized and self.redis_client:
                 return await self.redis_client.exists(cache_key) > 0
             else:
-                if cache_key in self._fallback_cache:
-                    _, expiry = self._fallback_cache[cache_key]
-                    return expiry > datetime.now()
-                return False
-                
+                async with self._lock:
+                    if cache_key in self._fallback_cache:
+                        _, expiry = self._fallback_cache[cache_key]
+                        return expiry > datetime.now()
+                    return False
+
         except Exception as e:
             logger.error(f"Cache exists error: {e}")
             return False
@@ -241,12 +246,13 @@ class CacheService:
                     if cursor == 0:
                         break
             else:
-                # Clear from fallback cache
-                keys_to_delete = [k for k in self._fallback_cache if k.startswith(f"{namespace}:")]
-                for key in keys_to_delete:
-                    del self._fallback_cache[key]
-                    count += 1
-            
+                # Clear from fallback cache (thread-safe)
+                async with self._lock:
+                    keys_to_delete = [k for k in self._fallback_cache if k.startswith(f"{namespace}:")]
+                    for key in keys_to_delete:
+                        del self._fallback_cache[key]
+                        count += 1
+
             self._metrics["evictions"] += count
             return count
             

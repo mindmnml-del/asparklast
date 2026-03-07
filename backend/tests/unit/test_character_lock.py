@@ -4,19 +4,23 @@ Test character creation, validation, and consistency management
 """
 
 import pytest
-import tempfile
 import json
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+
 from core.character_lock import (
-    CharacterSheet, 
+    CharacterSheet,
     CharacterLockManager,
-    GenderType, 
-    AgeRange, 
+    GenderType,
+    AgeRange,
     BuildType
 )
+from core.models import Base
 
 
 class TestCharacterSheet:
@@ -168,11 +172,24 @@ class TestCharacterLockManager:
 
     @pytest.fixture
     def temp_manager(self):
-        """Create a temporary character manager for testing"""
-        with tempfile.TemporaryDirectory() as temp_dir:
-            manager = CharacterLockManager()
-            manager.character_storage_path = Path(temp_dir)
-            yield manager
+        """Create a temporary character manager backed by in-memory SQLite"""
+        test_engine = create_engine(
+            "sqlite:///:memory:",
+            connect_args={"check_same_thread": False},
+            poolclass=StaticPool,
+        )
+        Base.metadata.create_all(bind=test_engine)
+        TestSession = sessionmaker(bind=test_engine)
+
+        manager = CharacterLockManager()
+        manager._db_loaded = True  # Skip lazy loading from real DB
+        manager.characters.clear()
+        manager.active_locks.clear()
+        manager._get_session = lambda: TestSession()  # Override session factory
+
+        yield manager
+
+        Base.metadata.drop_all(bind=test_engine)
 
     def test_create_character(self, temp_manager):
         """Test character creation through manager"""
@@ -333,29 +350,31 @@ class TestCharacterLockManager:
         assert no_char_enhanced == base_prompt
 
     def test_character_persistence(self, temp_manager):
-        """Test character saving and loading"""
+        """Test character saving to database"""
+        from core.models import Character
+
         # Create character
         character_data = {
             "name": "Persistence Test",
-            "description": "Should persist across restarts",
+            "description": "Should persist in database",
             "eye_color": "amber",
             "distinctive_features": ["birthmark on forehead"]
         }
-        
+
         character = temp_manager.create_character(character_data)
         char_id = character.character_id
-        
-        # Verify file was created
-        char_file = temp_manager.character_storage_path / f"{char_id}.json"
-        assert char_file.exists()
-        
-        # Verify file contents
-        with open(char_file, 'r') as f:
-            saved_data = json.load(f)
-        
-        assert saved_data["name"] == "Persistence Test"
-        assert saved_data["eye_color"] == "amber"
-        assert saved_data["distinctive_features"] == ["birthmark on forehead"]
+
+        # Verify it was saved to DB by querying directly
+        db = temp_manager._get_session()
+        try:
+            row = db.query(Character).filter(Character.character_id == char_id).first()
+            assert row is not None
+            assert row.name == "Persistence Test"
+            assert row.description == "Should persist in database"
+            assert row.attributes.get("eye_color") == "amber"
+            assert row.attributes.get("distinctive_features") == ["birthmark on forehead"]
+        finally:
+            db.close()
 
     def test_manager_statistics(self, temp_manager):
         """Test character manager statistics"""
