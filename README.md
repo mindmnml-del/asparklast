@@ -1,7 +1,10 @@
+<p align="center"><img src="docs/assets/banner.png" alt="AISpark Studio Banner" width="100%"></p>
+
 # AISpark Studio
 
 > AI-powered creative prompt generation platform with RAG, 6 Helios personalities, and visual character consistency.
 
+[![CI](https://github.com/mindmnml-del/asparklast/actions/workflows/ci.yml/badge.svg)](https://github.com/mindmnml-del/asparklast/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/Python-3.11+-3776AB?style=flat&logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?style=flat&logo=fastapi&logoColor=white)
 ![Next.js](https://img.shields.io/badge/Next.js-15.5-000000?style=flat&logo=nextdotjs&logoColor=white)

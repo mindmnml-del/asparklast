@@ -1,0 +1,1 @@
+Replace this file with banner.png (recommended: 1280x640px, dark theme)
