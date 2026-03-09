@@ -4,11 +4,11 @@ Pytest configuration and fixtures for AISpark Studio tests
 
 import pytest
 import asyncio
-import os
 import sys
 from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from fastapi.testclient import TestClient
 from main import app
 from core.database import get_db
@@ -78,7 +78,6 @@ def pytest_sessionfinish(session, exitstatus):
 
 # In-memory SQLite database for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
-from sqlalchemy.pool import StaticPool
 
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,

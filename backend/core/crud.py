@@ -7,7 +7,7 @@ import logging
 from typing import Optional, List, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy import desc, func
+from sqlalchemy import desc
 
 from . import models, schemas, auth
 
@@ -161,7 +161,7 @@ def get_prompts_by_user(
         )
         
         if favorites_only:
-            query = query.filter(models.GeneratedPrompt.is_favorite == True)
+            query = query.filter(models.GeneratedPrompt.is_favorite)
         
         query = query.order_by(desc(models.GeneratedPrompt.created_at))
         
@@ -303,7 +303,7 @@ def get_user_stats(db: Session, user_id: int) -> Dict[str, Any]:
         
         favorite_prompts = db.query(models.GeneratedPrompt).filter(
             models.GeneratedPrompt.owner_id == user_id,
-            models.GeneratedPrompt.is_favorite == True
+            models.GeneratedPrompt.is_favorite
         ).count()
         
         total_feedback = db.query(models.Feedback).filter(
@@ -312,7 +312,7 @@ def get_user_stats(db: Session, user_id: int) -> Dict[str, Any]:
         
         positive_feedback = db.query(models.Feedback).filter(
             models.Feedback.user_id == user_id,
-            models.Feedback.liked == True
+            models.Feedback.liked
         ).count()
         
         return {
@@ -331,7 +331,7 @@ def get_system_stats(db: Session) -> Dict[str, Any]:
     """Get system-wide statistics"""
     try:
         total_users = db.query(models.User).count()
-        active_users = db.query(models.User).filter(models.User.is_active == True).count()
+        active_users = db.query(models.User).filter(models.User.is_active).count()
         total_prompts = db.query(models.GeneratedPrompt).count()
         total_feedback = db.query(models.Feedback).count()
         

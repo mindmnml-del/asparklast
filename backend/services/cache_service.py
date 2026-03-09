@@ -7,10 +7,9 @@ import json
 import pickle
 import hashlib
 import logging
-from typing import Optional, Any, Dict, List, Union
+from typing import Optional, Any, Dict, List
 from datetime import datetime, timedelta
 import asyncio
-from contextlib import asynccontextmanager
 
 import redis.asyncio as redis
 from redis.asyncio.connection import ConnectionPool
@@ -381,7 +380,7 @@ class CacheService:
                 info = await self.redis_client.info()
                 metrics["redis_memory"] = info.get("used_memory_human", "N/A")
                 metrics["redis_clients"] = info.get("connected_clients", 0)
-            except:
+            except Exception:
                 pass
         
         return metrics

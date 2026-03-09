@@ -3,7 +3,6 @@ Authentication and Authorization for AISpark Studio
 JWT token management and password hashing
 """
 
-import os
 import logging
 from datetime import datetime, timedelta, UTC
 from typing import Optional, Dict, Any

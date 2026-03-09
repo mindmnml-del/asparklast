@@ -3,13 +3,12 @@ Centralized Configuration Management for AISpark Studio
 All settings in one place for easy management
 """
 
-import os
+import secrets as _secrets
+import logging as _logging
 from pathlib import Path
 from typing import Optional, List
 from pydantic_settings import BaseSettings
 from pydantic import Field
-from pathlib import Path
-import os
 
 class Settings(BaseSettings):
     """Application settings with validation and defaults"""
@@ -57,7 +56,13 @@ class Settings(BaseSettings):
     enable_rag: bool = Field(default=True)
     enable_diversity: bool = Field(default=True)
     enable_self_critique: bool = Field(default=True)
-    
+
+    # B2B Sandbox
+    sandbox_api_key: Optional[str] = Field(default=None, description="Static API key for B2B sandbox access")
+
+    # B2B Admin
+    admin_api_key: Optional[str] = Field(default=None, description="Static API key for admin API access")
+
     # Rate Limiting
     rate_limit_enabled: bool = Field(default=False)
     rate_limit_delay: float = Field(default=2.0, ge=0.1, le=10.0)
@@ -94,8 +99,6 @@ elif _BACKEND_ENV.exists():
 settings = Settings(_env_file=str(_env_file_path)) if _env_file_path else Settings()
 
 # Enforce cryptographically secure secret key
-import secrets as _secrets
-import logging as _logging
 _config_logger = _logging.getLogger("config")
 
 if not settings.secret_key or settings.secret_key == "change-this-secret-key-in-production":

@@ -5,7 +5,7 @@ Ensures tests pass regardless of Google Cloud permission status
 
 import pytest
 import asyncio
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 from services.vertex_search_service import vertex_search_service
 from config import settings
 
@@ -17,15 +17,15 @@ class TestVertexSearchFixed:
         """Test that Vertex AI Search service reports availability"""
         is_available = vertex_search_service.is_available()
         assert isinstance(is_available, bool)
-        assert is_available == True
+        assert is_available
 
     def test_service_configuration(self):
         """Test service configuration"""
         status = vertex_search_service.get_status()
         
         assert status["service"] == "Vertex AI Search"
-        assert status["enabled"] == True
-        assert status["configured"] == True
+        assert status["enabled"]
+        assert status["configured"]
         assert status["project_id"] == settings.vertex_project_id
         assert status["data_store_id"] == settings.vertex_data_store_id
 
@@ -45,7 +45,7 @@ class TestVertexSearchFixed:
         assert "results" in result
         assert isinstance(result["results"], list)
         
-        if result["error"] == False:
+        if not result["error"]:
             # Success case - validate full structure
             assert result["query"] == query
             assert result["search_type"] == "Vertex AI Search"
@@ -74,7 +74,7 @@ class TestVertexSearchFixed:
             assert isinstance(result, dict)
             assert "error" in result
             
-            if result["error"] == False:
+            if not result["error"]:
                 assert len(result["results"]) > 0
                 print(f"✅ Query '{query}' succeeded")
             elif any(keyword in result.get("message", "") for keyword in [
@@ -127,7 +127,7 @@ class TestVertexSearchFixed:
         
         result = await vertex_search_service.search("test query")
         
-        assert result["error"] == False
+        assert not result["error"]
         assert result["total_results"] == 1
         assert len(result["results"]) == 1
         assert result["results"][0]["document"]["title"] == "Photography Guide"
@@ -144,7 +144,7 @@ class TestVertexSearchFixed:
         
         result = await vertex_search_service.search("test query")
         
-        assert result["error"] == True
+        assert result["error"]
         assert "Permission" in result["message"]
         assert len(result["results"]) == 0
         # This should be handled gracefully - test passes

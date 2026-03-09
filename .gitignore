@@ -6,6 +6,13 @@
 .env.production
 *.key
 credentials.json
+backend/.env
+
+# Claude Code local config
+.claude/settings.local.json
+
+# Junk/temp paths
+path/to/
 
 # Python
 __pycache__/

@@ -4,7 +4,6 @@ Tests the HeliosPersonalitySystem functionality and personality management
 """
 
 import pytest
-from unittest.mock import Mock, patch, AsyncMock
 
 # Import the system under test
 from core.helios_personalities import HeliosPersonalitySystem, PersonalityType

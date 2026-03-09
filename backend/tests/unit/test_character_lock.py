@@ -4,10 +4,7 @@ Test character creation, validation, and consistency management
 """
 
 import pytest
-import json
 from datetime import datetime
-from pathlib import Path
-from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker

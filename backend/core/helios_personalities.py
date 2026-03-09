@@ -6,7 +6,7 @@ Dynamic personality selection and prompt enhancement
 import logging
 import random
 from enum import Enum
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Tuple, Any
 from dataclasses import dataclass
 import re
 
@@ -299,8 +299,6 @@ class HeliosPersonalitySystem:
     
     def get_personality_prompt_enhancement(self, personality: PersonalityType, base_prompt: str) -> str:
         """Get personality-specific prompt enhancements"""
-        profile = self.personalities[personality]
-        
         enhancements = {
             PersonalityType.PROMETHEUS: [
                 "with technical precision and professional-grade quality",
@@ -351,7 +349,7 @@ class HeliosPersonalitySystem:
         context += f"Signature Elements: {', '.join(primary_profile.signature_elements)}\n"
         
         if secondary:
-            context += f"\nSecondary Influences: "
+            context += "\nSecondary Influences: "
             context += ", ".join([f"{self.personalities[p].name}" for p in secondary])
         
         return context

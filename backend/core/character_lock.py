@@ -4,7 +4,7 @@ Ensures visual consistency across video generation sequences
 """
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any, Union
+from typing import Dict, List, Optional, Any
 from enum import Enum
 import json
 import logging
@@ -239,7 +239,7 @@ class CharacterSheet:
             if date_field in data and isinstance(data[date_field], str):
                 try:
                     data[date_field] = datetime.fromisoformat(data[date_field])
-                except:
+                except (ValueError, TypeError):
                     data[date_field] = datetime.now()
         
         return cls(**data)
