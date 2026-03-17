@@ -20,8 +20,11 @@ backend/prompt-studio-final1-*.json
 backend/streamlit-vertex-key.json
 backend/vertex-key.json
 
-# Claude Code local config
-.claude/settings.local.json
+# Claude Code / Agent config
+.claude/
+.agent/
+CLAUDE.md
+*/CLAUDE.md
 
 # Python
 __pycache__/
@@ -92,6 +95,23 @@ docs/HEALTH_AUDIT.md
 docs/*-AUDIT.md
 docs/*-REVIEW.md
 docs/*-BRAINSTORM*.md
+*STRATEGY*.md
+*AUDIT*.md
+*MONETIZATION*.md
+*_PLAN.md
+*_REPORT.md
+*_VISION.md
+*_ANALYSIS.md
+*_ROADMAP.md
+
+# Legacy frontend (Streamlit) — kept locally, not in public repo
+frontend/
+
+# Knowledge base — proprietary RAG source documents
+knowledge_base/
+
+# Coverage reports
+htmlcov/
 
 # Junk/temp paths
 path/to/

@@ -192,13 +192,26 @@ npm run test:e2e
 
 ## Roadmap
 
-- [ ] SQLite to PostgreSQL migration with Alembic
+### Completed
+- [x] Route extraction — monolithic main.py refactored into 8 domain-specific routers
+- [x] Vertex AI RAG pipeline — 34 curated documents integrated via Vertex AI Search
+- [x] Next.js 15 frontend with TanStack Query + Zustand state management
+- [x] Multi-tenant B2B API key authentication and tenant isolation
+- [x] Character Lock system — 79 visual trait fields for cross-generation consistency
+- [x] Helios personality engine — 6 AI personalities with algorithmic auto-blending
+- [x] Critic pipeline — self-critique scoring and prompt quality analysis
+- [x] Comprehensive test suite (57 tests passing)
+- [x] Repository sanitized for public release
+
+### Next
+- [ ] SQLite → PostgreSQL migration with Alembic
 - [ ] HttpOnly cookie auth (replace client-side JWT storage)
 - [ ] Circuit breaker pattern for Vertex AI calls
-- [ ] OpenAPI to TypeScript type generation (eliminate frontend type drift)
+- [ ] OpenAPI → TypeScript type generation
 - [ ] Redis caching layer (replace in-memory cache)
 - [ ] Docker containerization
 - [ ] Frontend error boundaries
+- [ ] CI/CD pipeline
 
 ---
 
