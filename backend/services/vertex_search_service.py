@@ -45,35 +45,16 @@ class VertexSearchService:
                 logger.warning("Vertex AI Search configuration incomplete")
                 return False
             
-            # Try to use Application Default Credentials first
-            # This works if user has done: gcloud auth application-default login
-            # If that fails, try service account key file
-            service_account_path = Path("streamlit-vertex-key.json")
-            if service_account_path.exists():
-                # Set credentials environment variable
-                os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = str(service_account_path.resolve())
-                logger.info("Using service account key file for authentication")
-            else:
-                logger.info("Service account key file not found, trying Application Default Credentials")
-            
             # Import and initialize the client with explicit service account
             from google.cloud import discoveryengine_v1 as discoveryengine
             from google.oauth2 import service_account
-            
-            # Force service account credentials
+
+            # Resolve service account key file from settings
             service_account_path = None
-            
-            # Check for service account key file from settings
             if settings.google_application_credentials:
-                service_account_path = Path(settings.google_application_credentials)
-                
-            # Fallback to old path
-            if not service_account_path or not service_account_path.exists():
-                service_account_path = Path("streamlit-vertex-key.json")
-                
-            # Fallback to different key file
-            if not service_account_path.exists():
-                service_account_path = Path("prompt-studio-final1-d373010defde.json")
+                candidate = Path(settings.google_application_credentials)
+                if candidate.exists():
+                    service_account_path = candidate
             
             if service_account_path and service_account_path.exists():
                 credentials = service_account.Credentials.from_service_account_file(
@@ -415,7 +396,7 @@ class VertexSearchService:
             "engine_id": getattr(settings, 'vertex_engine_id', ''),
             "location": settings.vertex_location,
             "serving_config": settings.vertex_serving_config,
-            "service_account_file": "streamlit-vertex-key.json",
+            "service_account_file": settings.google_application_credentials or "not configured",
             "serving_config_path": self.serving_config_path if self._initialized else None
         }
 

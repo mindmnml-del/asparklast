@@ -210,3 +210,43 @@ class CacheStats(BaseModel):
 class CharacterExtractionRequest(BaseModel):
     """Request to extract character/environment traits from a prompt"""
     prompt: str = Field(..., min_length=10)
+
+
+# --- B2B Admin Schemas ---
+
+class TenantCreate(BaseModel):
+    """Schema for creating a new B2B tenant"""
+    name: str
+
+class TenantResponse(BaseModel):
+    """Tenant response schema"""
+    id: int
+    name: str
+    created_at: datetime
+    is_active: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+class ApiKeyCreate(BaseModel):
+    """Schema for generating a new API key"""
+    name: Optional[str] = None
+
+class ApiKeyResponseWithRaw(BaseModel):
+    """API key response including the one-time raw key"""
+    id: int
+    prefix: str
+    name: Optional[str] = None
+    tenant_id: int
+    created_at: datetime
+    raw_key: str
+
+class ApiKeyResponse(BaseModel):
+    """API key response for listing (no sensitive fields)"""
+    id: int
+    prefix: str
+    name: Optional[str] = None
+    tenant_id: int
+    is_active: bool
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)

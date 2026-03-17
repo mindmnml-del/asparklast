@@ -2,17 +2,26 @@
 
 # Environment and secrets
 .env
+.env.*
 .env.local
 .env.production
+*.env
 *.key
+*.pem
 credentials.json
 backend/.env
+frontend-v3/.env
+
+# Google Cloud Credentials - NEVER COMMIT
+*-credentials.json
+*-key.json
+service-account*.json
+backend/prompt-studio-final1-*.json
+backend/streamlit-vertex-key.json
+backend/vertex-key.json
 
 # Claude Code local config
 .claude/settings.local.json
-
-# Junk/temp paths
-path/to/
 
 # Python
 __pycache__/
@@ -20,27 +29,22 @@ __pycache__/
 *$py.class
 *.so
 .Python
-build/
 develop-eggs/
-dist/
-downloads/
 eggs/
 .eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
+sdist/
+wheels/
 
 # Database
 *.db
 *.sqlite
 *.sqlite3
 aispark_studio.db
+backend/*.db-shm
+backend/*.db-wal
 
 # Logs
 *.log
@@ -72,23 +76,22 @@ env/
 *.tmp
 *.bak
 
-*.env
-.env.*
-*.pem
-backend/.env
-frontend-v3/.env
+# Node / Next.js
+node_modules/
+.next/
+dist/
+build/
 
-# Google Cloud Credentials - NEVER COMMIT
-backend/prompt-studio-final1-d373010defde.json
-backend/streamlit-vertex-key.json
-*-credentials.json
-*-key.json
-service-account*.json
+# Test artifacts
+backend/test_out.txt
+nextjs-frontend/playwright-report/
+nextjs-frontend/test-results/
 
-# Database files - runtime data
-backend/*.db-shm
-backend/*.db-wal
-backend/aispark_studio.db
+# Internal docs not for public
+docs/HEALTH_AUDIT.md
+docs/*-AUDIT.md
+docs/*-REVIEW.md
+docs/*-BRAINSTORM*.md
 
-# Claude settings
-.claude/settings.local.json
+# Junk/temp paths
+path/to/

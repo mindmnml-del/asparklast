@@ -375,3 +375,38 @@ export interface CacheStats {
   evictions: number;
   ttl_seconds: number;
 }
+
+// --- Admin / B2B ---
+
+export interface TenantCreate {
+  name: string;
+}
+
+export interface TenantResponse {
+  id: number;
+  name: string;
+  created_at: string;
+  is_active: boolean;
+}
+
+export interface ApiKeyCreate {
+  name?: string;
+}
+
+export interface ApiKeyResponseWithRaw {
+  id: number;
+  prefix: string;
+  name: string | null;
+  tenant_id: number;
+  created_at: string;
+  raw_key: string;
+}
+
+export interface ApiKeyResponse {
+  id: number;
+  prefix: string;
+  name: string | null;
+  tenant_id: number;
+  is_active: boolean;
+  created_at: string;
+}

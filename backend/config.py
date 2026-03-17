@@ -129,14 +129,9 @@ def validate_api_key() -> bool:
     """Validate that Google API key or Vertex AI credentials are available"""
     # Check for Vertex AI service account (preferred)
     project = settings.vertex_project_id or settings.google_cloud_project
-    if project:
-        for candidate in [
-            settings.google_application_credentials,
-            "vertex-key.json",
-            "streamlit-vertex-key.json",
-        ]:
-            if candidate and Path(candidate).exists():
-                return True
+    if project and settings.google_application_credentials:
+        if Path(settings.google_application_credentials).exists():
+            return True
     # Fallback: legacy API key
     return bool(settings.google_api_key and settings.google_api_key != "your_google_api_key_here")
 

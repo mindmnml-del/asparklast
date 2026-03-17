@@ -81,9 +81,9 @@ class Feedback(Base):
 class ApiUsage(Base):
     """Track API usage for analytics and rate limiting"""
     __tablename__ = "api_usage"
-    
+
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     tenant_id = Column(Integer, ForeignKey("tenants.id"), nullable=True, index=True)
     endpoint = Column(String(255), nullable=False)
     method = Column(String(10), nullable=False)

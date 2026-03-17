@@ -18,3 +18,11 @@ Load skills from `~/.claude/skills/` directory. Each skill has a `SKILL.md` file
 - Only ADD new functionality, never change existing working code
 - Service account configuration must remain unchanged
 - Backend uses FastAPI + Python, Frontend uses Next.js + TypeScript + Tailwind
+
+## Directory-Specific Context
+- When working in `backend/`, read and follow `backend/CLAUDE.md`
+- When working in `nextjs-frontend/`, read and follow `nextjs-frontend/CLAUDE.md`
+
+## Validation Hooks
+- Before completing any **backend** task, run: `bash .claude/hooks/backend-check.sh`
+- Before completing any **frontend** task, run: `bash .claude/hooks/frontend-check.sh`

@@ -1,6 +1,6 @@
 """
 Shared Google Gen AI client for Vertex AI text generation.
-Uses service account credentials from vertex-key.json.
+Uses service account credentials configured via GOOGLE_APPLICATION_CREDENTIALS.
 Singleton pattern - shared by UnifiedAIService and UnifiedCriticService.
 """
 
@@ -32,14 +32,6 @@ def _resolve_credentials() -> Optional[Credentials]:
         if sa_path.exists():
             creds = Credentials.from_service_account_file(str(sa_path), scopes=scopes)
             logger.info(f"GenAI client: loaded credentials from {sa_path}")
-            return creds
-
-    # Priority 2: known key file names in working directory
-    for candidate in ["vertex-key.json", "streamlit-vertex-key.json"]:
-        p = Path(candidate)
-        if p.exists():
-            creds = Credentials.from_service_account_file(str(p), scopes=scopes)
-            logger.info(f"GenAI client: loaded credentials from {p}")
             return creds
 
     logger.warning("GenAI client: no service account key file found, falling back to ADC")
@@ -98,11 +90,8 @@ def validate_vertex_config() -> bool:
     project = settings.vertex_project_id or settings.google_cloud_project
     if not project:
         return False
-    # Check that at least one credential source exists
+    # Check that credential source exists
     if settings.google_application_credentials:
         if Path(settings.google_application_credentials).exists():
-            return True
-    for candidate in ["vertex-key.json", "streamlit-vertex-key.json"]:
-        if Path(candidate).exists():
             return True
     return False
