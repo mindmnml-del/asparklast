@@ -29,21 +29,21 @@ B2B API-first platform for AI-generated visual consistency. Character Lock syste
 ```mermaid
 graph TD
     subgraph Client["Next.js 15 Frontend"]
-        UI[App Router + Zustand + TanStack Query]
+        UI["App Router + Zustand + TanStack Query"]
     end
 
     subgraph Backend["FastAPI Backend"]
         Routers[API Routers]
-        GenService[Unified AI Service - Gemini]
-        SearchService[Vertex Search Service - RAG]
-        CriticService[Unified Critic Service]
-        Core[Core: Models + Schemas + Auth + CRUD]
-        CharLock[Character Lock - 79 Traits]
-        Helios[Helios - 6 Personalities]
+        GenService["Unified AI Service · Gemini"]
+        SearchService["Vertex Search Service · RAG"]
+        CriticService["Unified Critic Service"]
+        Core["Core: Models + Schemas + Auth + CRUD"]
+        CharLock["Character Lock · 79 Traits"]
+        Helios["Helios · 6 Personalities"]
     end
 
     subgraph Storage["Data Layer"]
-        DB[(SQLite - WAL Mode)]
+        DB[("SQLite · WAL Mode")]
     end
 
     subgraph Cloud["Google Cloud"]
