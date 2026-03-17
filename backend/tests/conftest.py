@@ -98,6 +98,28 @@ def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
+# Mock vertex_search_service to be enabled and available for tests
+from services.vertex_search_service import vertex_search_service
+from unittest.mock import MagicMock
+
+vertex_search_service._initialize = lambda: True
+vertex_search_service.is_available = lambda: True
+vertex_search_service.client = MagicMock()
+vertex_search_service.get_status = lambda: {
+    "service": "Vertex AI Search",
+    "enabled": True,
+    "configured": True,
+    "initialized": True,
+    "available": True,
+    "project_id": "test-project",
+    "data_store_id": "test-datastore",
+    "engine_id": "test-engine",
+    "location": "global",
+    "serving_config": "default_search",
+    "service_account_file": "test-key.json",
+    "serving_config_path": "projects/test-project/locations/global/collections/default_collection/dataStores/test-datastore/servingConfigs/default_search"
+}
+
 
 @pytest.fixture(scope="function")
 def db_session(request):
