@@ -202,16 +202,21 @@ npm run test:e2e
 - [x] Critic pipeline — self-critique scoring and prompt quality analysis
 - [x] Comprehensive test suite (57 tests passing)
 - [x] Repository sanitized for public release
+- [x] SQLite → PostgreSQL migration with Alembic
+- [x] HttpOnly cookie auth (replace client-side JWT storage)
+- [x] Circuit breaker pattern for Vertex AI and Gemini calls
+- [x] Redis caching layer with in-memory fallback
+- [x] Docker containerization (PostgreSQL 16 + Redis 7 + API)
+- [x] Frontend error boundaries (`error.tsx`, `not-found.tsx`)
+- [x] CI/CD pipeline (GitHub Actions — lint, type-check, test, build)
+- [x] Comprehensive architecture documentation (`docs/ARCHITECTURE.md`)
 
 ### Next
-- [ ] SQLite → PostgreSQL migration with Alembic
-- [ ] HttpOnly cookie auth (replace client-side JWT storage)
-- [ ] Circuit breaker pattern for Vertex AI calls
-- [ ] OpenAPI → TypeScript type generation
-- [ ] Redis caching layer (replace in-memory cache)
-- [ ] Docker containerization
-- [ ] Frontend error boundaries
-- [ ] CI/CD pipeline
+- [ ] OpenAPI → TypeScript type generation (`generate-types` script)
+- [ ] Playwright E2E test suite
+- [ ] The Studio — Phase 3 generation workspace (PersonalitySelector, GenerationProgress, GenerationForm)
+- [ ] Prompt history search and filtering
+- [ ] Usage analytics dashboard
 
 ---
 
