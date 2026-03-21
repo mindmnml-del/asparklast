@@ -15,7 +15,10 @@ try:
 except ImportError:
     python_docx = None
 
+import pybreaker
+
 from config import settings
+from core.circuit_breaker import vertex_search_breaker
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +102,11 @@ class VertexSearchService:
             logger.error(f"Failed to initialize Vertex AI Search: {e}")
             return False
     
+    @vertex_search_breaker
+    def _execute_search(self, request):
+        """Execute search with circuit breaker protection."""
+        return self.client.search(request=request)
+
     def is_available(self) -> bool:
         """Check if Vertex AI Search is available"""
         return self._initialize()
@@ -141,9 +149,9 @@ class VertexSearchService:
             if filter_expression:
                 request.filter = filter_expression
             
-            # Perform search
-            response = self.client.search(request=request)
-            
+            # Perform search (circuit breaker protected)
+            response = self._execute_search(request=request)
+
             # Process results
             results = []
             for result in response.results:
@@ -262,6 +270,13 @@ class VertexSearchService:
                 "serving_config": self.serving_config_path
             }
             
+        except pybreaker.CircuitBreakerError:
+            logger.warning("Vertex Search circuit breaker is open — skipping search")
+            return {
+                "error": True,
+                "message": "Vertex Search temporarily unavailable (circuit open)",
+                "results": []
+            }
         except Exception as e:
             logger.error(f"Vertex AI Search error: {e}")
             return {

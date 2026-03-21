@@ -10,12 +10,13 @@ export default function AuthHydrator({
 }: {
   children: React.ReactNode;
 }) {
-  const { isAuthenticated, user, setUser, clearAuth } = useAuthStore();
+  const { user, setUser, clearAuth } = useAuthStore();
 
+  // Always attempt hydration — the httpOnly cookie authenticates the request
   const { data, error } = useQuery({
     queryKey: ["currentUser"],
     queryFn: getCurrentUser,
-    enabled: isAuthenticated && !user,
+    enabled: !user,
     retry: false,
     staleTime: 5 * 60 * 1000,
   });

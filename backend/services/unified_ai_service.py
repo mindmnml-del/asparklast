@@ -23,8 +23,12 @@ from services.genai_client import (
     validate_vertex_config,
 )
 
+import pybreaker
+
 from config import settings, get_master_prompt_path, validate_api_key
 from core.helios_personalities import helios_system, PersonalityType
+from core.circuit_breaker import gemini_breaker
+from services.cache_service import cache as cache_service
 from services.unified_critic_service import critic_service, AnalysisType
 
 # Set up logging
@@ -68,9 +72,7 @@ class UnifiedAIService:
         self.request_queue = asyncio.Queue(maxsize=settings.max_concurrent_requests)
         self.rate_limiter_lock = asyncio.Lock()
         
-        # Caching
-        self.cache = {}
-        self.cache_stats = {"hits": 0, "misses": 0, "size": 0}
+        # Caching (delegated to global CacheService — Redis with in-memory fallback)
         
         # Diversity tracking (prevent repetitive responses)
         self.recent_responses = []
@@ -245,47 +247,20 @@ Respond with a structured JSON containing:
         cache_string = json.dumps(cache_data, sort_keys=True)
         return hashlib.md5(cache_string.encode()).hexdigest()
     
-    def _get_from_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
-        """Get response from cache if available"""
+    async def _get_from_cache(self, cache_key: str) -> Optional[Dict[str, Any]]:
+        """Get response from Redis-backed cache"""
         if not cache_key or not settings.enable_cache:
             return None
-        
-        if cache_key in self.cache:
-            cached_data = self.cache[cache_key]
-            if cached_data["expires"] > datetime.now():
-                self.cache_stats["hits"] += 1
-                logger.info("✅ Cache hit")
-                return cached_data["data"]
-            else:
-                # Remove expired entry
-                del self.cache[cache_key]
-                self.cache_stats["size"] -= 1
-        
-        self.cache_stats["misses"] += 1
-        return None
-    
-    def _save_to_cache(self, cache_key: str, data: Dict[str, Any]) -> None:
-        """Save response to cache"""
+        result = await cache_service.get(cache_key, namespace="ai_generation")
+        if result is not None:
+            logger.info("✅ Cache hit")
+        return result
+
+    async def _save_to_cache(self, cache_key: str, data: Dict[str, Any]) -> None:
+        """Save response to Redis-backed cache"""
         if not cache_key or not settings.enable_cache:
             return
-        
-        # Clean cache if too large
-        if len(self.cache) >= settings.cache_max_size:
-            # Remove oldest entries
-            sorted_cache = sorted(
-                self.cache.items(), 
-                key=lambda x: x[1]["created"]
-            )
-            for old_key, _ in sorted_cache[:len(self.cache) // 4]:
-                del self.cache[old_key]
-                self.cache_stats["size"] -= 1
-        
-        self.cache[cache_key] = {
-            "data": data,
-            "created": datetime.now(),
-            "expires": datetime.now() + timedelta(seconds=settings.cache_ttl)
-        }
-        self.cache_stats["size"] += 1
+        await cache_service.set(cache_key, data, ttl=settings.cache_ttl, namespace="ai_generation")
     
     def _apply_diversity(self, prompt: str) -> str:
         """Apply diversity techniques to avoid repetitive responses"""
@@ -660,6 +635,22 @@ Respond with a structured JSON containing:
             logger.error(f"Error in Vertex Search RAG: {e}. Continuing generation without RAG.")
             return ""
     
+    async def _generate_with_breaker(self, model: str, contents: str, config):
+        """Async wrapper for Gemini generation with circuit breaker protection."""
+        if gemini_breaker.current_state == pybreaker.STATE_OPEN:
+            raise pybreaker.CircuitBreakerError(gemini_breaker)
+        try:
+            result = await self.async_client.models.generate_content(
+                model=model, contents=contents, config=config,
+            )
+            gemini_breaker._success_call()
+            return result
+        except pybreaker.CircuitBreakerError:
+            raise
+        except Exception as e:
+            gemini_breaker._failure_call()
+            raise
+
     async def generate_response(self, request_data: Dict[str, Any], user_token: str = None) -> Dict[str, Any]:
         """Generate AI response with all optimizations"""
         
@@ -677,7 +668,7 @@ Respond with a structured JSON containing:
             
             # Check cache first
             cache_key = self._get_cache_key(request_data)
-            cached_response = self._get_from_cache(cache_key)
+            cached_response = await self._get_from_cache(cache_key)
             if cached_response:
                 return cached_response
             
@@ -707,8 +698,8 @@ Respond with a structured JSON containing:
             
             full_prompt = f"{self.master_prompt}\n\n{base_prompt}{rag_context}"
             
-            # Generate response (native async via Vertex AI)
-            response = await self.async_client.models.generate_content(
+            # Generate response (native async via Vertex AI, circuit breaker protected)
+            response = await self._generate_with_breaker(
                 model=settings.ai_model_name,
                 contents=full_prompt,
                 config=self.generation_config,
@@ -748,10 +739,17 @@ Respond with a structured JSON containing:
             self.total_response_time += result["_metadata"]["response_time"]
             
             # Cache result
-            self._save_to_cache(cache_key, result)
+            await self._save_to_cache(cache_key, result)
             
             return result
             
+        except pybreaker.CircuitBreakerError:
+            logger.warning("Gemini circuit breaker is open — generation skipped")
+            return {
+                "error": True,
+                "message": "AI generation temporarily unavailable (circuit open)",
+                "details": "The Gemini API circuit breaker is open due to repeated failures. Retrying shortly."
+            }
         except Exception as e:
             logger.error(f"❌ Generation failed: {e}")
             return {
@@ -954,7 +952,7 @@ Respond with a structured JSON containing:
             "model_name": settings.ai_model_name,
             "request_count": self.request_count,
             "avg_response_time": round(avg_response_time, 2),
-            "cache_stats": self.cache_stats.copy(),
+            "cache_stats": cache_service._metrics.copy(),
             "rag_ready": self.rag_ready,
             "knowledge_files": len(self.knowledge_base),
             "recent_responses_count": len(self.recent_responses),
@@ -962,15 +960,12 @@ Respond with a structured JSON containing:
             "last_error": self.last_error
         }
     
-    def clear_cache(self) -> Dict[str, Any]:
-        """Clear the response cache"""
-        cache_size = len(self.cache)
-        self.cache.clear()
-        self.cache_stats = {"hits": 0, "misses": 0, "size": 0}
-
+    async def clear_cache(self) -> Dict[str, Any]:
+        """Clear the AI generation cache namespace"""
+        count = await cache_service.clear_namespace("ai_generation")
         return {
-            "message": f"Cache cleared. Removed {cache_size} entries.",
-            "cache_stats": self.cache_stats.copy()
+            "message": f"Cache cleared. Removed {count} entries.",
+            "cache_stats": cache_service._metrics.copy()
         }
 
     def extract_character_traits(self, prompt: str) -> Dict[str, Any]:

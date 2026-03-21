@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { loginUser, registerUser, getCurrentUser } from "@/lib/api/auth";
 import { useAuthStore } from "@/store/authStore";
-import { setToken, ApiError } from "@/lib/api/client";
+import apiClient, { ApiError } from "@/lib/api/client";
 import type { UserCreate, User, Token } from "@/lib/types/api";
 
 const USER_QUERY_KEY = ["currentUser"] as const;
@@ -21,14 +21,13 @@ export function useAuth() {
     { email: string; password: string }
   >({
     mutationFn: async ({ email, password }) => {
+      // Backend sets httpOnly cookie via Set-Cookie header
       const token = await loginUser(email, password);
-      // Set cookie so the interceptor picks it up for the next call
-      setToken(token.access_token);
       const user = await getCurrentUser();
       return { token, user };
     },
-    onSuccess: ({ token, user }) => {
-      loginSuccess(token.access_token, user);
+    onSuccess: ({ user }) => {
+      loginSuccess(user);
       queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY });
       router.push("/generate");
     },
@@ -42,22 +41,21 @@ export function useAuth() {
   >({
     mutationFn: async (payload) => {
       const user = await registerUser(payload);
-      // Auto-login after registration
+      // Auto-login after registration — backend sets httpOnly cookie
       const token = await loginUser(payload.email, payload.password);
-      setToken(token.access_token);
-      // Re-fetch user to ensure fresh data
       const freshUser = await getCurrentUser();
       return { token, user: freshUser ?? user };
     },
-    onSuccess: ({ token, user }) => {
-      loginSuccess(token.access_token, user);
+    onSuccess: ({ user }) => {
+      loginSuccess(user);
       queryClient.invalidateQueries({ queryKey: USER_QUERY_KEY });
       router.push("/generate");
     },
   });
 
   // --- Logout ---
-  const logout = () => {
+  const logout = async () => {
+    await apiClient.post("/auth/logout").catch(() => {});
     clearAuth();
     queryClient.removeQueries({ queryKey: USER_QUERY_KEY });
     router.push("/login");

@@ -10,8 +10,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from core.database import create_tables
 from services.unified_ai_service import ai_service
+from services.cache_service import cache as cache_service
 from utils.health_check import get_quick_health
 
 # Routers
@@ -42,8 +42,13 @@ async def lifespan(app: FastAPI):
     logger.info("AISpark Studio starting...")
 
     try:
-        create_tables()
-        logger.info("Database ready")
+        from alembic.config import Config as AlembicConfig
+        from alembic import command as alembic_command
+        alembic_cfg = AlembicConfig("alembic.ini")
+        alembic_command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations applied")
+
+        await cache_service.initialize()
 
         if ai_service.ensure_ready():
             logger.info("AI Service ready")
@@ -55,6 +60,7 @@ async def lifespan(app: FastAPI):
         raise
 
     yield
+    await cache_service.close()
     logger.info("Shutting down...")
 
 

@@ -1,0 +1,39 @@
+# Virtual environments
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+
+# Service account keys (NEVER bake into image)
+vertex-key.json
+prompt-studio-final1-*.json
+streamlit-vertex-key.json
+*.json.bak
+
+# Environment files (injected at runtime)
+.env
+.env.*
+!.env.example
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Testing & development
+tests/
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Migration artifacts & temp files
+characters_migrated/
+=1.0.0
+add_credits_col.py
+
+# IDE & OS
+.vscode/
+.idea/
+*.swp
+.DS_Store

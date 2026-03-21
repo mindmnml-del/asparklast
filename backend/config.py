@@ -70,9 +70,16 @@ class Settings(BaseSettings):
     
     # Caching
     enable_cache: bool = Field(default=True)
+    cache_enabled: bool = Field(default=True)
     cache_ttl: int = Field(default=1800, ge=60, le=86400)
     cache_max_size: int = Field(default=1000, ge=10, le=10000)
-    
+
+    # Redis
+    redis_url: str = Field(default="")
+    redis_password: str = Field(default="")
+    redis_db: int = Field(default=0)
+    redis_pool_size: int = Field(default=10)
+
     # Paths
     knowledge_base_path: str = Field(default="knowledge_base")
     master_prompt_file: str = Field(default="helios_master_prompt.txt")

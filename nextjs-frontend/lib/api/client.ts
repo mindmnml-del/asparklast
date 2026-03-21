@@ -1,6 +1,5 @@
 import axios, {
   type AxiosError,
-  type InternalAxiosRequestConfig,
   type AxiosResponse,
 } from "axios";
 
@@ -23,34 +22,7 @@ export class ApiError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// Cookie helpers (aispark_token, non-httpOnly, SameSite=Strict, 24h TTL)
-// ---------------------------------------------------------------------------
-
-const TOKEN_COOKIE = "aispark_token";
-const TOKEN_MAX_AGE = 86400; // 24 hours in seconds
-
-export function getToken(): string | null {
-  if (typeof document === "undefined") return null;
-  const match = document.cookie.match(
-    new RegExp("(?:^|; )" + TOKEN_COOKIE + "=([^;]*)")
-  );
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-export function setToken(token: string): void {
-  if (typeof document === "undefined") return;
-  document.cookie = `${TOKEN_COOKIE}=${encodeURIComponent(
-    token
-  )}; path=/; max-age=${TOKEN_MAX_AGE}; SameSite=Strict`;
-}
-
-export function clearToken(): void {
-  if (typeof document === "undefined") return;
-  document.cookie = `${TOKEN_COOKIE}=; path=/; max-age=0; SameSite=Strict`;
-}
-
-// ---------------------------------------------------------------------------
-// Axios Instance
+// Axios Instance — cookies sent automatically via withCredentials
 // ---------------------------------------------------------------------------
 
 const apiClient = axios.create({
@@ -59,22 +31,8 @@ const apiClient = axios.create({
     "Content-Type": "application/json",
   },
   timeout: 60_000,
+  withCredentials: true,
 });
-
-// ---------------------------------------------------------------------------
-// Request Interceptor: Inject Bearer token
-// ---------------------------------------------------------------------------
-
-apiClient.interceptors.request.use(
-  (config: InternalAxiosRequestConfig) => {
-    const token = getToken();
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
-    return config;
-  },
-  (error: AxiosError) => Promise.reject(error)
-);
 
 // ---------------------------------------------------------------------------
 // Response Interceptor: Handle 401 and 402
@@ -88,7 +46,8 @@ apiClient.interceptors.response.use(
       error.response?.data?.detail ?? error.message ?? "Unknown error";
 
     if (status === 401) {
-      clearToken();
+      // Ask the backend to clear the httpOnly cookie
+      apiClient.post("/auth/logout").catch(() => {});
       if (typeof window !== "undefined") {
         window.location.href = "/login";
       }

@@ -110,6 +110,14 @@ frontend/
 # Knowledge base — proprietary RAG source documents
 knowledge_base/
 
+# Migrated character data (personal/test data)
+backend/characters_migrated/
+characters_migrated/
+
+# Internal brainstorm & review docs
+docs/*BRAINSTORM*.md
+docs/*REVIEW*.md
+
 # Coverage reports
 htmlcov/
 

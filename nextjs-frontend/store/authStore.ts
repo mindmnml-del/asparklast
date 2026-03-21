@@ -2,7 +2,6 @@
 
 import { create } from "zustand";
 import type { User } from "@/lib/types/api";
-import { getToken, setToken, clearToken } from "@/lib/api/client";
 
 interface AuthState {
   user: User | null;
@@ -11,14 +10,14 @@ interface AuthState {
   credits: number;
 
   setUser: (user: User) => void;
-  loginSuccess: (token: string, user: User) => void;
+  loginSuccess: (user: User) => void;
   clearAuth: () => void;
   setLoading: (loading: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  isAuthenticated: !!getToken(),
+  isAuthenticated: false,
   isLoading: false,
   credits: 0,
 
@@ -29,8 +28,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       credits: user.credits,
     }),
 
-  loginSuccess: (token: string, user: User) => {
-    setToken(token);
+  loginSuccess: (user: User) => {
     set({
       user,
       isAuthenticated: true,
@@ -39,7 +37,6 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   clearAuth: () => {
-    clearToken();
     set({
       user: null,
       isAuthenticated: false,

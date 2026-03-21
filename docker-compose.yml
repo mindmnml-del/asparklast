@@ -1,0 +1,61 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aispark}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aispark_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-aispark_studio}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aispark} -d ${POSTGRES_DB:-aispark_studio}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "8001:8001"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Database — overrides the SQLite default from .env
+      AISPARK_DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-aispark}:${POSTGRES_PASSWORD:-aispark_dev}@db:5432/${POSTGRES_DB:-aispark_studio}
+      # Google Cloud credentials (mounted read-only below)
+      GOOGLE_APPLICATION_CREDENTIALS: /secrets/vertex-key.json
+      AISPARK_GOOGLE_APPLICATION_CREDENTIALS: /secrets/vertex-key.json
+      # Redis (ready for Phase 3 cache consolidation)
+      REDIS_URL: redis://redis:6379/0
+    env_file:
+      - ./backend/.env
+    volumes:
+      # Mount service account key read-only
+      - ./backend/vertex-key.json:/secrets/vertex-key.json:ro
+
+volumes:
+  pgdata:
+  redisdata:
