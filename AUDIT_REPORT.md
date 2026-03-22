@@ -72,6 +72,7 @@ AISpark Studio is a high-quality, production-ready AI prompt engineering platfor
 1.  **Bcrypt Incompatibility**: `bcrypt 5.0.0` breaks `passlib` password hashing (Fixed in audit environment).
 2.  **Pydantic Warnings**: Multiple `PydanticDeprecatedSince20` warnings across models/schemas (Needs refactor to `ConfigDict`).
 3.  **Vertex Search Credential Error**: The service crashes initialization if credentials aren't found, rather than failing silently with a warning (Gracefully handled in audit fixes).
+4.  **Frontend CI Lockfile Mismatch**: `npm ci` fails due to `package-lock.json` being out of sync with `package.json` (Resolved via `npm install`).
 
 ### Top 10 Action Items (Priority Order)
 1.  **Fix Bcrypt**: Downgrade to `bcrypt==3.1.7` to restore auth functionality.
