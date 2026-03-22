@@ -194,7 +194,7 @@ export default function GenerationForm() {
           className={cn(
             "flex items-start gap-3 rounded-lg border p-4",
             isCreditsError
-              ? "border-amber-500/30 bg-amber-500/10 text-amber-300"
+              ? "border-amber-400/20 bg-amber-400/[0.06] backdrop-blur-sm text-amber-300"
               : "border-red-500/30 bg-red-500/10 text-red-300"
           )}
         >
@@ -202,10 +202,18 @@ export default function GenerationForm() {
           <div className="text-sm">
             <p>{error}</p>
             {isCreditsError && (
-              <p className="mt-1 text-xs opacity-75">
-                Your prompt has been saved. Get more Sparks to continue
-                generating.
-              </p>
+              <>
+                <p className="mt-1 text-xs opacity-75">
+                  Your prompt has been saved. Get more Sparks to continue
+                  generating.
+                </p>
+                <a
+                  href="/admin"
+                  className="mt-2 inline-block text-xs font-semibold text-amber-400 underline underline-offset-2 hover:text-amber-300 transition-colors"
+                >
+                  Get more Sparks →
+                </a>
+              </>
             )}
           </div>
         </div>

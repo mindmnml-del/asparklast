@@ -98,6 +98,15 @@ def override_get_db():
 
 app.dependency_overrides[get_db] = override_get_db
 
+# Bypass rate limiting in tests — consistent TestClient IP would exhaust limits on repeated runs
+from core.rate_limiter import check_login_rate_limit, check_register_rate_limit
+
+async def no_rate_limit():
+    pass
+
+app.dependency_overrides[check_login_rate_limit] = no_rate_limit
+app.dependency_overrides[check_register_rate_limit] = no_rate_limit
+
 
 @pytest.fixture(scope="function")
 def db_session(request):

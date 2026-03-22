@@ -12,8 +12,8 @@ from datetime import datetime
 class UserCreate(BaseModel):
     """Schema for user registration"""
     email: EmailStr
-    password: str = Field(..., min_length=8, description="Password must be at least 8 characters")
-    full_name: Optional[str] = None
+    password: str = Field(..., min_length=8, max_length=128, description="Password must be at least 8 characters")
+    full_name: Optional[str] = Field(default=None, max_length=100)
 
 class UserLogin(BaseModel):
     """Schema for user login"""
@@ -23,38 +23,38 @@ class UserLogin(BaseModel):
 class FeedbackCreate(BaseModel):
     """Schema for creating feedback"""
     liked: bool
-    comment: Optional[str] = None
+    comment: Optional[str] = Field(default=None, max_length=2000)
 
 class StudioRequest(BaseModel):
     """Schema for AI prompt generation request"""
     # Core Concept
-    subject_action: str = Field(..., min_length=3, description="Main subject and action")
-    environment_setting: Optional[str] = ""
+    subject_action: str = Field(..., min_length=3, max_length=2000, description="Main subject and action")
+    environment_setting: Optional[str] = Field(default="", max_length=1000)
 
     # Technical & Artistic Details
-    shot_type: Optional[str] = "Default"
-    lighting: Optional[str] = ""
-    mood: Optional[str] = "Default"
-    color_palette: Optional[str] = ""
+    shot_type: Optional[str] = Field(default="Default", max_length=100)
+    lighting: Optional[str] = Field(default="", max_length=200)
+    mood: Optional[str] = Field(default="Default", max_length=100)
+    color_palette: Optional[str] = Field(default="", max_length=200)
     artistic_styles: List[str] = []
-    negative_prompts: Optional[str] = ""
+    negative_prompts: Optional[str] = Field(default="", max_length=2000)
 
     # Target & Configuration
     prompt_type: str = Field(default="image", pattern="^(image|video)$")
-    target_model: str
+    target_model: str = Field(..., max_length=100)
     use_rag: bool = True
-    user_language: str = 'en'
+    user_language: str = Field(default='en', max_length=10)
 
     # Spark Shield
     auto_improve: bool = Field(default=False, description="Auto-improve prompt via Spark Shield critic before generation")
 
 class GenerationRequest(BaseModel):
     """Schema for AI prompt generation request"""
-    prompt: str = Field(..., min_length=3, description="User prompt for generation")
-    negative_prompt: Optional[str] = ""
-    style: str = "professional"
+    prompt: str = Field(..., min_length=3, max_length=5000, description="User prompt for generation")
+    negative_prompt: Optional[str] = Field(default="", max_length=2000)
+    style: str = Field(default="professional", max_length=50)
     type: str = Field(default="image", pattern="^(image|video|universal)$")
-    tool: str = "Universal"
+    tool: str = Field(default="Universal", max_length=100)
     diversity_enabled: bool = True
     rag_enabled: bool = True
 
@@ -63,8 +63,8 @@ class GenerationRequest(BaseModel):
 
 class CriticAnalysisRequest(BaseModel):
     """Schema for critic analysis request"""
-    prompt: str = Field(..., min_length=10)
-    negative_prompt: Optional[str] = ""
+    prompt: str = Field(..., min_length=10, max_length=5000)
+    negative_prompt: Optional[str] = Field(default="", max_length=2000)
     analysis_type: str = Field(default="photo", pattern="^(photo|video|both)$")
 
 # --- Response Schemas ---
@@ -209,14 +209,14 @@ class CacheStats(BaseModel):
 
 class CharacterExtractionRequest(BaseModel):
     """Request to extract character/environment traits from a prompt"""
-    prompt: str = Field(..., min_length=10)
+    prompt: str = Field(..., min_length=10, max_length=5000)
 
 
 # --- B2B Admin Schemas ---
 
 class TenantCreate(BaseModel):
     """Schema for creating a new B2B tenant"""
-    name: str
+    name: str = Field(..., min_length=2, max_length=200)
 
 class TenantResponse(BaseModel):
     """Tenant response schema"""
@@ -229,7 +229,7 @@ class TenantResponse(BaseModel):
 
 class ApiKeyCreate(BaseModel):
     """Schema for generating a new API key"""
-    name: Optional[str] = None
+    name: Optional[str] = Field(default=None, max_length=100)
 
 class ApiKeyResponseWithRaw(BaseModel):
     """API key response including the one-time raw key"""

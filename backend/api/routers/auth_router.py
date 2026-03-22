@@ -11,6 +11,7 @@ from config import settings
 from core import models, schemas, crud, auth
 from core.auth import ACCESS_TOKEN_EXPIRE_MINUTES
 from core.database import get_db
+from core.rate_limiter import check_login_rate_limit, check_register_rate_limit
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +65,7 @@ def login(
     response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: Session = Depends(get_db),
+    _rl: None = Depends(check_login_rate_limit),
 ):
     user = crud.authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -93,7 +95,11 @@ def logout(response: Response):
 
 
 @router.post("/auth/register", response_model=schemas.User)
-def register(user_data: schemas.UserCreate, db: Session = Depends(get_db)):
+def register(
+    user_data: schemas.UserCreate,
+    db: Session = Depends(get_db),
+    _rl: None = Depends(check_register_rate_limit),
+):
     if crud.get_user_by_email(db, user_data.email):
         raise HTTPException(status_code=400, detail="Email already registered")
 

@@ -20,14 +20,22 @@ DATABASE_URL = settings.database_url
 # Create engine with optimized settings
 if DATABASE_URL.startswith("sqlite"):
     # SQLite specific optimizations
+    # In-memory SQLite requires StaticPool to share one connection across threads.
+    # File-based SQLite uses QueuePool to allow WAL-mode concurrent reads/writes.
+    is_memory_db = ":memory:" in DATABASE_URL
+    if is_memory_db:
+        pool_kwargs: dict = {"poolclass": StaticPool}
+    else:
+        pool_kwargs = {"pool_size": 5, "max_overflow": 10, "pool_pre_ping": True}
+
     engine = create_engine(
         DATABASE_URL,
         connect_args={
             "check_same_thread": False,
             "timeout": 20,
         },
-        poolclass=StaticPool,
-        echo=settings.debug_mode,  # SQL logging in debug mode
+        echo=settings.debug_mode,
+        **pool_kwargs,
     )
     
     # SQLite performance optimizations

@@ -952,7 +952,7 @@ Respond with a structured JSON containing:
             "model_name": settings.ai_model_name,
             "request_count": self.request_count,
             "avg_response_time": round(avg_response_time, 2),
-            "cache_stats": cache_service._metrics.copy(),
+            "cache_stats": cache_service._metrics.copy(),  # sync-safe access; use clear_cache() for full async metrics
             "rag_ready": self.rag_ready,
             "knowledge_files": len(self.knowledge_base),
             "recent_responses_count": len(self.recent_responses),
@@ -965,7 +965,7 @@ Respond with a structured JSON containing:
         count = await cache_service.clear_namespace("ai_generation")
         return {
             "message": f"Cache cleared. Removed {count} entries.",
-            "cache_stats": cache_service._metrics.copy()
+            "cache_stats": await cache_service.get_metrics()
         }
 
     def extract_character_traits(self, prompt: str) -> Dict[str, Any]:

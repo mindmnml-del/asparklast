@@ -153,8 +153,8 @@ class TestAuthenticatedEndpoints:
         response = authenticated_client.get("/critic/stats")
         assert response.status_code == 200
 
-    @patch('main.crud.get_prompts_by_user')
-    @patch('main.crud.get_prompt_by_id')
+    @patch('api.routers.prompts_router.crud.get_prompts_by_user')
+    @patch('api.routers.prompts_router.crud.get_prompt_by_id')
     def test_export_json(self, mock_get_by_id, mock_get_by_user, mock_prompts, authenticated_client):
         """Test exporting prompts to JSON with enhanced metadata."""
         mock_get_by_user.return_value = mock_prompts
@@ -167,8 +167,8 @@ class TestAuthenticatedEndpoints:
         assert prompt4_data["helios_personality"] == "athena"
         assert prompt4_data["character_name"] == "Lady Ann"
 
-    @patch('main.crud.get_prompts_by_user')
-    @patch('main.crud.get_prompt_by_id')
+    @patch('api.routers.prompts_router.crud.get_prompts_by_user')
+    @patch('api.routers.prompts_router.crud.get_prompt_by_id')
     def test_export_csv(self, mock_get_by_id, mock_get_by_user, mock_prompts, authenticated_client):
         """Test exporting prompts to CSV with enhanced metadata."""
         mock_get_by_user.return_value = mock_prompts
@@ -183,8 +183,8 @@ class TestAuthenticatedEndpoints:
         assert 'character_name' in header
         assert len(rows) == 5
 
-    @patch('main.crud.get_prompts_by_user')
-    @patch('main.crud.get_prompt_by_id')
+    @patch('api.routers.prompts_router.crud.get_prompts_by_user')
+    @patch('api.routers.prompts_router.crud.get_prompt_by_id')
     def test_export_txt(self, mock_get_by_id, mock_get_by_user, mock_prompts, authenticated_client):
         """Test exporting prompts to TXT with enhanced metadata."""
         mock_get_by_user.return_value = mock_prompts

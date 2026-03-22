@@ -4,10 +4,13 @@ Modular backend with domain-specific routers and unified services.
 """
 
 import logging
+import time
+import uuid
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from config import settings
 from services.unified_ai_service import ai_service
@@ -34,6 +37,46 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to every response."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        if not settings.debug_mode:
+            response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+        return response
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    """Attach a correlation ID and log every request/response."""
+
+    async def dispatch(self, request: Request, call_next) -> Response:
+        request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
+        start = time.perf_counter()
+
+        response = await call_next(request)
+
+        duration_ms = round((time.perf_counter() - start) * 1000)
+        logger.info(
+            "request completed",
+            extra={
+                "request_id": request_id,
+                "method": request.method,
+                "path": request.url.path,
+                "status_code": response.status_code,
+                "duration_ms": duration_ms,
+            },
+        )
+        response.headers["X-Request-ID"] = request_id
+        return response
 
 
 @asynccontextmanager
@@ -77,12 +120,15 @@ _cors_origins = [
     if origin.strip()
 ]
 
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_cors_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=["Authorization", "Content-Type", "X-API-Key", "X-Request-ID"],
+    expose_headers=["X-Request-ID"],
 )
 
 # Register domain routers
